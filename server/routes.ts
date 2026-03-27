@@ -80,6 +80,15 @@ function requireAdmin(req: any, res: any, next: any) {
   next();
 }
 
+function saveSession(req: any): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.save((err: unknown) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+}
+
 async function runHealthMonitor() {
   console.log("[health-monitor] Running scheduled health check...");
   try {
@@ -159,6 +168,7 @@ export async function registerRoutes(
       if (req.body.rememberMe !== false) {
         req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
       }
+      await saveSession(req);
 
       storage.trackEvent({
         userId: user.id,
@@ -199,6 +209,7 @@ export async function registerRoutes(
       if (req.body.rememberMe) {
         req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
       }
+      await saveSession(req);
 
       storage.trackEvent({
         userId: user.id,
@@ -521,7 +532,13 @@ export async function registerRoutes(
       return res.status(401).json({ message: "密码错误" });
     }
     (req.session as any).isAdmin = true;
-    res.json({ ok: true });
+    req.session.save((err) => {
+      if (err) {
+        console.error("[admin] save session error:", err);
+        return res.status(500).json({ message: "登录失败，请稍后重试" });
+      }
+      res.json({ ok: true });
+    });
   });
 
   app.get("/api/admin/session", (req, res) => {
