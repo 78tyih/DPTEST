@@ -5,13 +5,14 @@ import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { saveIntakeProfile, syncPendingIntakeProfile, type IntakeProfile } from "@/utils/intake";
 
-const MARKET_OPTIONS = ["股票", "期货", "外汇", "加密货币", "港美股", "其他"];
+const MARKET_OPTIONS = ["国内股票", "国内期货", "加密市场", "港美股", "国际期货"];
 const CAPITAL_OPTIONS = ["1万以下", "1万到30万", "30万到100万", "100万以上"];
 const EXPERIENCE_OPTIONS = ["3个月以内", "3个月-1年", "1-3年", "3年以上"];
 const SYSTEM_OPTIONS = [
   "裸K加传统形态技术分析",
   "价格行为 / ICT / SMC",
   "订单流 / 量价分析",
+  "MT4 / MT5",
   "量化 / 程序自动化",
   "还没有稳定体系",
 ];
