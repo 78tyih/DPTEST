@@ -1,5 +1,6 @@
 export interface IntakeProfile {
   primaryMarkets: string[];
+  marketDetails: string;
   tradingCapitalRange: string;
   tradingExperience: string;
   tradingSystem: string;

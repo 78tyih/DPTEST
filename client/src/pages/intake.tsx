@@ -32,6 +32,7 @@ export default function IntakePage() {
   const [stepIndex, setStepIndex] = useState(0);
   const [profile, setProfile] = useState<IntakeProfile>({
     primaryMarkets: [],
+    marketDetails: "",
     tradingCapitalRange: "",
     tradingExperience: "",
     tradingSystem: "",
@@ -138,6 +139,33 @@ export default function IntakePage() {
                 );
               })}
             </div>
+
+            {step.key === "primaryMarkets" && (
+              <div className="space-y-2">
+                <label
+                  htmlFor="market-details"
+                  className="block text-sm font-medium"
+                  style={{ color: "var(--text-strong)" }}
+                >
+                  具体在做哪些标的？可选填
+                </label>
+                <textarea
+                  id="market-details"
+                  value={profile.marketDetails}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, marketDetails: e.target.value.slice(0, 120) }))}
+                  placeholder="例如：沪深300股指期货、纳指、BTC、黄金、英伟达"
+                  className="w-full min-h-[92px] rounded-xl px-4 py-3 text-sm outline-none resize-none"
+                  style={{
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-strong)",
+                  }}
+                />
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  建议填写你最常做的 1-3 个具体标的，方便后续更准确跟进
+                </p>
+              </div>
+            )}
 
             {step.multi && (
               <button

@@ -75,6 +75,7 @@ interface UserTags {
   labels?: string[];
   profile?: {
     primaryMarkets?: string[];
+    marketDetails?: string;
     tradingCapitalRange?: string;
     tradingExperience?: string;
     tradingSystem?: string;
@@ -699,6 +700,10 @@ function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; on
                 <span style={{ color: 'var(--text-strong)' }}> {user.tags?.profile?.primaryMarkets?.join('、') || '-'}</span>
               </div>
               <div style={{ color: 'var(--text-muted)' }}>
+                具体标的：
+                <span style={{ color: 'var(--text-strong)' }}> {user.tags?.profile?.marketDetails || '-'}</span>
+              </div>
+              <div style={{ color: 'var(--text-muted)' }}>
                 资金体量：
                 <span style={{ color: 'var(--text-strong)' }}> {user.tags?.profile?.tradingCapitalRange || '-'}</span>
               </div>
@@ -948,7 +953,7 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
       const min = entries.reduce((a, b) => a[1] <= b[1] ? a : b);
       return DIMENSION_NAMES[min[0]] || min[0];
     };
-    const header = "ID,手机号,昵称,微信号,来源,交易品种,资金体量,交易时长,交易体系,阶段,登录天数,交易者类型,综合评分,认知格局,执行力,风险管理,市场适应,交易心理,系统思维,薄弱维度,注册时间,测评时间,最后活跃";
+    const header = "ID,手机号,昵称,微信号,来源,交易品种,具体标的,资金体量,交易时长,交易体系,阶段,登录天数,交易者类型,综合评分,认知格局,执行力,风险管理,市场适应,交易心理,系统思维,薄弱维度,注册时间,测评时间,最后活跃";
     const rows = filtered.map(u => [
       u.id,
       escapeCSV(u.phone),
@@ -956,6 +961,7 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
       escapeCSV(u.wechat_id),
       escapeCSV(u.source),
       escapeCSV(u.tags?.profile?.primaryMarkets?.join(" / ")),
+      escapeCSV(u.tags?.profile?.marketDetails),
       escapeCSV(u.tags?.profile?.tradingCapitalRange),
       escapeCSV(u.tags?.profile?.tradingExperience),
       escapeCSV(u.tags?.profile?.tradingSystem),
@@ -1110,6 +1116,7 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
                   <span data-testid={`text-login-days-${u.id}`}>登录 {u.login_days} 天</span>
                   {u.source && <span data-testid={`text-source-${u.id}`}>来源: {u.source}</span>}
                   {u.tags?.profile?.primaryMarkets?.length ? <span>品种: {u.tags.profile.primaryMarkets.join(" / ")}</span> : null}
+                  {u.tags?.profile?.marketDetails ? <span>标的: {u.tags.profile.marketDetails}</span> : null}
                   {u.tags?.profile?.tradingCapitalRange ? <span>资金: {u.tags.profile.tradingCapitalRange}</span> : null}
                   {u.tags?.profile?.tradingExperience ? <span>时长: {u.tags.profile.tradingExperience}</span> : null}
                   {u.quiz_completed_at && <span data-testid={`text-quiz-date-${u.id}`}>测评 {formatDate(u.quiz_completed_at)}</span>}

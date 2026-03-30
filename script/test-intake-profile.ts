@@ -23,6 +23,7 @@ Object.defineProperty(globalThis, "localStorage", {
 
 saveIntakeProfile({
   primaryMarkets: ["期货", "加密货币"],
+  marketDetails: "沪深300股指期货 / BTC",
   tradingCapitalRange: "30万到100万",
   tradingExperience: "1-3年",
   tradingSystem: "价格行为 / ICT / SMC",
@@ -31,6 +32,7 @@ saveIntakeProfile({
 const loaded = loadIntakeProfile();
 assert.deepEqual(loaded, {
   primaryMarkets: ["期货", "加密货币"],
+  marketDetails: "沪深300股指期货 / BTC",
   tradingCapitalRange: "30万到100万",
   tradingExperience: "1-3年",
   tradingSystem: "价格行为 / ICT / SMC",

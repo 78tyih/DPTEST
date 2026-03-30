@@ -476,6 +476,7 @@ export async function registerRoutes(
         source,
         tags,
         primaryMarkets,
+        marketDetails,
         tradingCapitalRange,
         tradingExperience,
         tradingSystem,
@@ -487,6 +488,7 @@ export async function registerRoutes(
         profile: {
           ...((existingTags.profile as Record<string, unknown> | undefined) || {}),
           ...(primaryMarkets !== undefined ? { primaryMarkets } : {}),
+          ...(marketDetails !== undefined ? { marketDetails } : {}),
           ...(tradingCapitalRange !== undefined ? { tradingCapitalRange } : {}),
           ...(tradingExperience !== undefined ? { tradingExperience } : {}),
           ...(tradingSystem !== undefined ? { tradingSystem } : {}),
