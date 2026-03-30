@@ -20,10 +20,12 @@ import LoadingPage from "@/pages/loading";
 import ResultPage from "@/pages/result";
 import ReportPage from "@/pages/report";
 import { calculateResult, type QuizResult } from "@/utils/calculateResult";
+import { buildResultWebhookPayload, sendResultWebhook } from "@/utils/webhook";
 import { traderTypes, rankTiers, rarityMap } from "@/data/traderTypes";
 
 const ANSWERS_KEY = "quiz_answers";
 const RESULT_KEY = "quiz_result";
+const RESULT_WEBHOOK_SENT_KEY = "quiz_result_webhook_sent";
 
 const pageTransition = {
   initial: { opacity: 0, y: 12 },
@@ -107,6 +109,7 @@ function ResultRoute({ quizResult }: { quizResult: QuizResult | null }) {
 function Router() {
   const [location, navigate] = useLocation();
   const [quizResult, setQuizResult] = useState<QuizResult | null>(loadResult);
+  const { user } = useAuth();
 
   useEffect(() => {
     if (quizResult) {
@@ -119,6 +122,7 @@ function Router() {
     localStorage.setItem(ANSWERS_KEY, JSON.stringify(answers));
     sessionStorage.setItem(ANSWERS_KEY, JSON.stringify(answers));
     sessionStorage.removeItem("quiz_result_saved");
+    sessionStorage.removeItem(RESULT_WEBHOOK_SENT_KEY);
     const result = calculateResult(answers);
     setQuizResult(result);
 
@@ -139,13 +143,25 @@ function Router() {
         sessionStorage.setItem("quiz_result_saved", "true");
         queryClient.invalidateQueries({ queryKey: ["/api/quiz-result"] });
         queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+
+        if (user?.phone && sessionStorage.getItem(RESULT_WEBHOOK_SENT_KEY) !== "true") {
+          const payload = buildResultWebhookPayload({
+            phone: user.phone,
+            normalizedScores: result.normalizedScores,
+            traderTypeCode: result.traderType.code,
+            avgScore: result.avgScore,
+            rankName: result.rank.name,
+          });
+          sendResultWebhook(payload).catch(() => {});
+          sessionStorage.setItem(RESULT_WEBHOOK_SENT_KEY, "true");
+        }
       }
     } catch (err) {
       // Will be saved later after login
     }
 
     navigate("/loading");
-  }, [navigate]);
+  }, [navigate, user]);
 
   const handleLoadingDone = useCallback(() => {
     navigate("/result");

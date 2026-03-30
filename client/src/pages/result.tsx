@@ -18,12 +18,14 @@ import { usePageView, useTracking } from "@/hooks/use-tracking";
 // 企业微信相关 imports 已移除
 import { useAuth } from "@/lib/auth";
 import { queryClient } from "@/lib/queryClient";
+import { buildResultWebhookPayload, sendResultWebhook } from "@/utils/webhook";
 
 interface ResultPageProps {
   result: QuizResult;
 }
 
 const ease = { duration: 0.22, ease: "easeOut" as const };
+const RESULT_WEBHOOK_SENT_KEY = "quiz_result_webhook_sent";
 
 function CharacterCardReveal({ result, onDone, tier = 0 }: { result: QuizResult; onDone: () => void; tier?: number }) {
   const [phase, setPhase] = useState(0);
@@ -582,6 +584,18 @@ export default function ResultPage({ result }: ResultPageProps) {
           sessionStorage.setItem("quiz_result_saved", "true");
           queryClient.invalidateQueries({ queryKey: ["/api/quiz-result"] });
           queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+
+          if (user?.phone && sessionStorage.getItem(RESULT_WEBHOOK_SENT_KEY) !== "true") {
+            const payload = buildResultWebhookPayload({
+              phone: user.phone,
+              normalizedScores,
+              traderTypeCode: traderType.code,
+              avgScore,
+              rankName: rank.name,
+            });
+            sendResultWebhook(payload).catch(() => {});
+            sessionStorage.setItem(RESULT_WEBHOOK_SENT_KEY, "true");
+          }
         }).catch(() => {
           toast({ title: "结果保存失败，请刷新页面重试", variant: "destructive" });
         });
