@@ -51,6 +51,14 @@ export const salesContacts = pgTable("sales_contacts", {
 
 // ========== 聊天系统 ==========
 
+export const agents = pgTable("agents", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 50 }).notNull(),
+  username: varchar("username", { length: 50 }).notNull().unique(),
+  password: text("password").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const conversations = pgTable("conversations", {
   id: serial("id").primaryKey(),
 
@@ -61,8 +69,13 @@ export const conversations = pgTable("conversations", {
   // 会话状态：ai（AI 接管）、human（人工接管）、closed（已关闭）
   status: varchar("status", { length: 20 }).default("ai").notNull(),
 
-  // 接管的客服人员（admin 表暂用 salesContacts 的 name，后续可扩展）
+  // 接管的客服人员
   assignedAgent: varchar("assigned_agent", { length: 100 }),
+
+  // 直播间邀约状态：none（未邀约）、early（提前邀约，9:30前）、late（会后发链接，9:30后）
+  inviteStatus: varchar("invite_status", { length: 10 }).default("none").notNull(),
+  invitedAt: timestamp("invited_at"),
+  invitedBy: varchar("invited_by", { length: 100 }),
 
   // 客户的测评结果摘要（方便客服快速了解）
   quizSummary: jsonb("quiz_summary"),
@@ -87,6 +100,7 @@ export const chatMessages = pgTable("chat_messages", {
 
 export type Conversation = typeof conversations.$inferSelect;
 export type ChatMessage = typeof chatMessages.$inferSelect;
+export type Agent = typeof agents.$inferSelect;
 
 export const insertSalesContactSchema = createInsertSchema(salesContacts).pick({
   name: true,

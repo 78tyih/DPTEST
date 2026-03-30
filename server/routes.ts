@@ -8,6 +8,7 @@ import connectPgSimple from "connect-pg-simple";
 import { pool, db } from "./db";
 import { sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import { getAdminStats, getExternalStats } from "./stats";
 
 let salesCounter = 0;
 
@@ -80,13 +81,11 @@ function requireAdmin(req: any, res: any, next: any) {
   next();
 }
 
-function saveSession(req: any): Promise<void> {
-  return new Promise((resolve, reject) => {
-    req.session.save((err: unknown) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
+function requireAgent(req: any, res: any, next: any) {
+  if (!(req.session as any).agentName) {
+    return res.status(401).json({ message: "未登录" });
+  }
+  next();
 }
 
 async function runHealthMonitor() {
@@ -138,7 +137,7 @@ export async function registerRoutes(
 
   app.use(
     session({
-      store: new PgStore({ pool, createTableIfMissing: true }),
+      store: new PgStore({ pool }),
       secret: process.env.SESSION_SECRET || "survey-session-secret",
       resave: false,
       saveUninitialized: false,
@@ -168,7 +167,6 @@ export async function registerRoutes(
       if (req.body.rememberMe !== false) {
         req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
       }
-      await saveSession(req);
 
       storage.trackEvent({
         userId: user.id,
@@ -181,7 +179,13 @@ export async function registerRoutes(
         storage.updateUserProfile(user.id, { source: req.body.source });
       }
 
-      res.json({ id: user.id, phone: user.phone });
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ message: "注册失败，请重试" });
+        }
+        res.json({ id: user.id, phone: user.phone });
+      });
     } catch (err) {
       console.error("Register error:", err);
       res.status(500).json({ message: "注册失败，请稍后重试" });
@@ -209,7 +213,6 @@ export async function registerRoutes(
       if (req.body.rememberMe) {
         req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
       }
-      await saveSession(req);
 
       storage.trackEvent({
         userId: user.id,
@@ -219,12 +222,18 @@ export async function registerRoutes(
 
       const loginResult = await storage.trackDailyLogin(user.id);
 
-      res.json({
-        id: user.id,
-        phone: user.phone,
-        tier: loginResult.newTier,
-        loginDays: loginResult.loginDays,
-        tierChanged: loginResult.tierChanged,
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ message: "登录失败，请重试" });
+        }
+        res.json({
+          id: user.id,
+          phone: user.phone,
+          tier: loginResult.newTier,
+          loginDays: loginResult.loginDays,
+          tierChanged: loginResult.tierChanged,
+        });
       });
     } catch (err) {
       console.error("Login error:", err);
@@ -234,14 +243,24 @@ export async function registerRoutes(
 
   app.post("/api/reset-password", async (req, res) => {
     try {
-      const { phone, newPassword } = req.body;
+      const { phone, oldPassword, newPassword } = req.body;
       if (!phone || !newPassword || newPassword.length < 6) {
         return res.status(400).json({ message: "请输入手机号和新密码（至少6位）" });
       }
 
       const user = await storage.getUserByPhone(phone);
       if (!user) {
-        return res.json({ ok: true });
+        // 不泄露用户是否存在
+        return res.status(400).json({ message: "手机号或原密码错误" });
+      }
+
+      // 必须验证原密码
+      if (!oldPassword) {
+        return res.status(400).json({ message: "请输入原密码" });
+      }
+      const valid = await bcrypt.compare(oldPassword, user.password);
+      if (!valid) {
+        return res.status(400).json({ message: "原密码错误" });
       }
 
       const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -252,6 +271,14 @@ export async function registerRoutes(
       console.error("Reset password error:", err);
       res.status(500).json({ message: "重置失败，请稍后重试" });
     }
+  });
+
+  // 公开接口：用户总数（社会证明）
+  app.get("/api/public-stats", async (_req, res) => {
+    try {
+      const stats = await storage.getPublicStats();
+      res.json(stats);
+    } catch { res.json({ totalUsers: 0 }); }
   });
 
   app.get("/api/me", async (req, res) => {
@@ -526,6 +553,71 @@ export async function registerRoutes(
     res.json({ disabled: true, message: "企业微信顾问服务暂停中" });
   });
 
+  // ===== 客服 Agent 独立登录系统 =====
+
+  app.post("/api/agent/login", async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ message: "请输入账号和密码" });
+    const agent = await storage.getAgentByUsername(username);
+    if (!agent) return res.status(401).json({ message: "账号不存在" });
+    const valid = await bcrypt.compare(password, agent.password);
+    if (!valid) return res.status(401).json({ message: "密码错误" });
+    (req.session as any).agentId = agent.id;
+    (req.session as any).agentName = agent.name;
+    req.session.save((err) => {
+      if (err) return res.status(500).json({ message: "登录失败" });
+      res.json({ ok: true, name: agent.name });
+    });
+  });
+
+  app.get("/api/agent/session", (req, res) => {
+    const agentName = (req.session as any).agentName;
+    res.json({ agentName: agentName || null });
+  });
+
+  app.post("/api/agent/logout", (req, res) => {
+    (req.session as any).agentName = null;
+    (req.session as any).agentId = null;
+    req.session.save(() => res.json({ ok: true }));
+  });
+
+  app.get("/api/agent/conversations", requireAgent, async (_req, res) => {
+    try {
+      const convs = await storage.getActiveConversations();
+      res.json(convs);
+    } catch (err) {
+      console.error("[agent] get conversations error:", err);
+      res.status(500).json({ message: "获取会话失败" });
+    }
+  });
+
+  app.patch("/api/agent/conversations/:id/invite", requireAgent, async (req, res) => {
+    const convId = parseInt(req.params.id);
+    const { status } = req.body as { status: 'early' | 'late' };
+    const agentName = (req.session as any).agentName as string;
+    if (!['early', 'late'].includes(status)) return res.status(400).json({ message: "无效的邀约类型" });
+    try {
+      await storage.markConversationInvite(convId, status, agentName);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[agent] mark invite error:", err);
+      res.status(500).json({ message: "记录失败" });
+    }
+  });
+
+  app.get("/api/agent/dashboard", requireAgent, async (req, res) => {
+    const agentName = (req.session as any).agentName as string;
+    try {
+      const stats = await storage.getAgentStats(agentName);
+      res.json(stats);
+    } catch (err) {
+      console.error("[agent] dashboard error:", err);
+      res.status(500).json({ message: "获取数据失败" });
+    }
+  });
+
+  // ===== Admin 登录 =====
+
   app.post("/api/admin/login", (req, res) => {
     const { password } = req.body;
     if (!ADMIN_PASSWORD || password !== ADMIN_PASSWORD) {
@@ -534,8 +626,8 @@ export async function registerRoutes(
     (req.session as any).isAdmin = true;
     req.session.save((err) => {
       if (err) {
-        console.error("[admin] save session error:", err);
-        return res.status(500).json({ message: "登录失败，请稍后重试" });
+        console.error("Admin session save error:", err);
+        return res.status(500).json({ message: "登录失败" });
       }
       res.json({ ok: true });
     });
@@ -638,6 +730,7 @@ export async function registerRoutes(
           u.nickname,
           u.wechat_id,
           u.source,
+          u.tags,
           u.tier,
           u.login_days,
           u.last_login_date,
@@ -646,6 +739,7 @@ export async function registerRoutes(
           q.trader_type_code,
           q.avg_score,
           q.rank_name,
+          q.scores,
           q.created_at AS quiz_completed_at
         FROM users u
         LEFT JOIN LATERAL (
@@ -660,97 +754,22 @@ export async function registerRoutes(
     }
   });
 
+  // 更新客户标签/备注
+  app.patch("/api/admin/users/:id/tags", requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const { tags } = req.body;
+      await db.execute(sql`UPDATE users SET tags = ${JSON.stringify(tags)}::jsonb WHERE id = ${userId}`);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[admin] update tags error:", err);
+      res.status(500).json({ message: "更新失败" });
+    }
+  });
+
   app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
     try {
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const weekStart = new Date(todayStart);
-      weekStart.setDate(weekStart.getDate() - 7);
-      const monthStart = new Date(todayStart);
-      monthStart.setDate(monthStart.getDate() - 30);
-
-      const overviewResult = await db.execute(sql`
-        SELECT
-          COUNT(*) FILTER (WHERE event_type = 'page_view') AS total_views,
-          COUNT(*) FILTER (WHERE event_type = 'user_register') AS total_registers,
-          COUNT(*) FILTER (WHERE event_type = 'wechat_click') AS total_wechat_clicks,
-          COUNT(*) FILTER (WHERE event_type = 'wechat_contact_assign') AS total_assigns,
-          COUNT(*) FILTER (WHERE event_type = 'quiz_complete') AS total_quiz_completes,
-          COUNT(*) FILTER (WHERE event_type = 'page_view' AND created_at >= ${todayStart}) AS today_views,
-          COUNT(*) FILTER (WHERE event_type = 'user_register' AND created_at >= ${todayStart}) AS today_registers,
-          COUNT(*) FILTER (WHERE event_type = 'wechat_click' AND created_at >= ${todayStart}) AS today_wechat_clicks,
-          COUNT(*) FILTER (WHERE event_type = 'page_view' AND created_at >= ${weekStart}) AS week_views,
-          COUNT(*) FILTER (WHERE event_type = 'user_register' AND created_at >= ${weekStart}) AS week_registers,
-          COUNT(*) FILTER (WHERE event_type = 'wechat_click' AND created_at >= ${weekStart}) AS week_wechat_clicks,
-          COUNT(DISTINCT session_id) FILTER (WHERE event_type = 'page_view') AS total_unique_visitors,
-          COUNT(DISTINCT session_id) FILTER (WHERE event_type = 'page_view' AND created_at >= ${todayStart}) AS today_unique_visitors
-        FROM user_events
-      `);
-      const overview = (overviewResult as any).rows?.[0] || (overviewResult as any)[0] || {};
-
-      const contactStats = await db.execute(sql`
-        SELECT
-          event_data->>'contactName' AS contact_name,
-          COUNT(*) AS assign_count
-        FROM user_events
-        WHERE event_type = 'wechat_contact_assign'
-          AND event_data->>'contactName' IS NOT NULL
-        GROUP BY event_data->>'contactName'
-        ORDER BY assign_count DESC
-      `);
-
-      const dailyTrend = await db.execute(sql`
-        SELECT
-          DATE(created_at) AS date,
-          COUNT(*) FILTER (WHERE event_type = 'page_view') AS views,
-          COUNT(*) FILTER (WHERE event_type = 'user_register') AS registers,
-          COUNT(*) FILTER (WHERE event_type = 'wechat_click') AS wechat_clicks
-        FROM user_events
-        WHERE created_at >= ${monthStart}
-        GROUP BY DATE(created_at)
-        ORDER BY date DESC
-        LIMIT 30
-      `);
-
-      const funnelResult = await db.execute(sql`
-        SELECT
-          COUNT(DISTINCT session_id) FILTER (WHERE event_type = 'page_view') AS step_view,
-          COUNT(DISTINCT session_id) FILTER (WHERE event_type = 'user_register') AS step_register,
-          COUNT(DISTINCT session_id) FILTER (WHERE event_type = 'quiz_complete') AS step_quiz,
-          COUNT(DISTINCT session_id) FILTER (WHERE event_type = 'wechat_click') AS step_wechat
-        FROM user_events
-      `);
-      const funnel = (funnelResult as any).rows?.[0] || (funnelResult as any)[0] || {};
-
-      const traderTypeResult = await db.execute(sql`
-        SELECT
-          event_data->>'traderTypeCode' AS type_code,
-          COUNT(*) AS count
-        FROM user_events
-        WHERE event_type = 'quiz_complete'
-          AND event_data->>'traderTypeCode' IS NOT NULL
-        GROUP BY event_data->>'traderTypeCode'
-        ORDER BY count DESC
-      `);
-
-      const hourlyResult = await db.execute(sql`
-        SELECT
-          EXTRACT(HOUR FROM created_at) AS hour,
-          COUNT(*) AS count
-        FROM user_events
-        WHERE event_type = 'page_view' AND created_at >= ${weekStart}
-        GROUP BY EXTRACT(HOUR FROM created_at)
-        ORDER BY hour
-      `);
-
-      res.json({
-        overview: overview || {},
-        contactStats: contactStats.rows || contactStats || [],
-        dailyTrend: (dailyTrend.rows || dailyTrend || []),
-        funnel: funnel || {},
-        traderTypes: traderTypeResult.rows || traderTypeResult || [],
-        hourlyDistribution: hourlyResult.rows || hourlyResult || [],
-      });
+      res.json(await getAdminStats());
     } catch (err) {
       console.error("[admin] stats error:", err);
       res.status(500).json({ message: "获取统计失败" });
@@ -769,94 +788,7 @@ export async function registerRoutes(
 
   app.get("/api/external/stats", requireApiKey, async (_req, res) => {
     try {
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const weekStart = new Date(todayStart);
-      weekStart.setDate(weekStart.getDate() - 7);
-
-      const overviewResult = await db.execute(sql`
-        SELECT
-          COUNT(*) FILTER (WHERE event_type = 'page_view') AS total_views,
-          COUNT(*) FILTER (WHERE event_type = 'user_register') AS total_registers,
-          COUNT(*) FILTER (WHERE event_type = 'wechat_click') AS total_wechat_clicks,
-          COUNT(*) FILTER (WHERE event_type = 'wechat_contact_assign') AS total_assigns,
-          COUNT(*) FILTER (WHERE event_type = 'quiz_complete') AS total_quiz_completes,
-          COUNT(*) FILTER (WHERE event_type = 'page_view' AND created_at >= ${todayStart}) AS today_views,
-          COUNT(*) FILTER (WHERE event_type = 'user_register' AND created_at >= ${todayStart}) AS today_registers,
-          COUNT(*) FILTER (WHERE event_type = 'wechat_click' AND created_at >= ${todayStart}) AS today_wechat_clicks,
-          COUNT(DISTINCT session_id) FILTER (WHERE event_type = 'page_view') AS total_unique_visitors,
-          COUNT(DISTINCT session_id) FILTER (WHERE event_type = 'page_view' AND created_at >= ${todayStart}) AS today_unique_visitors
-        FROM user_events
-      `);
-
-      const funnelResult = await db.execute(sql`
-        SELECT
-          COUNT(DISTINCT session_id) FILTER (WHERE event_type = 'page_view') AS step_view,
-          COUNT(DISTINCT session_id) FILTER (WHERE event_type = 'user_register') AS step_register,
-          COUNT(DISTINCT session_id) FILTER (WHERE event_type = 'quiz_complete') AS step_quiz,
-          COUNT(DISTINCT session_id) FILTER (WHERE event_type = 'wechat_click') AS step_wechat
-        FROM user_events
-      `);
-
-      const traderTypeResult = await db.execute(sql`
-        SELECT
-          event_data->>'traderTypeCode' AS type_code,
-          COUNT(*) AS count
-        FROM user_events
-        WHERE event_type = 'quiz_complete'
-          AND event_data->>'traderTypeCode' IS NOT NULL
-        GROUP BY event_data->>'traderTypeCode'
-        ORDER BY count DESC
-      `);
-
-      const contactStats = await db.execute(sql`
-        SELECT
-          event_data->>'contactName' AS contact_name,
-          COUNT(*) AS assign_count
-        FROM user_events
-        WHERE event_type = 'wechat_contact_assign'
-          AND event_data->>'contactName' IS NOT NULL
-        GROUP BY event_data->>'contactName'
-        ORDER BY assign_count DESC
-      `);
-
-      const dailyTrend = await db.execute(sql`
-        SELECT
-          DATE(created_at) AS date,
-          COUNT(*) FILTER (WHERE event_type = 'page_view') AS views,
-          COUNT(*) FILTER (WHERE event_type = 'user_register') AS registers,
-          COUNT(*) FILTER (WHERE event_type = 'wechat_click') AS wechat_clicks
-        FROM user_events
-        WHERE created_at >= ${weekStart}
-        GROUP BY DATE(created_at)
-        ORDER BY date DESC
-      `);
-
-      const usersResult = await db.execute(sql`
-        SELECT
-          id, phone, nickname, source, tier,
-          created_at AS registered_at,
-          last_active_at
-        FROM users
-        ORDER BY created_at DESC
-        LIMIT 100
-      `);
-
-      const maskedUsers = (usersResult.rows || usersResult || []).map((u: any) => ({
-        ...u,
-        phone: u.phone ? u.phone.slice(0, 3) + "****" + u.phone.slice(-4) : null,
-      }));
-
-      res.json({
-        source: "dptest.org",
-        generatedAt: new Date().toISOString(),
-        overview: (overviewResult as any).rows?.[0] || (overviewResult as any)[0] || {},
-        funnel: (funnelResult as any).rows?.[0] || (funnelResult as any)[0] || {},
-        traderTypes: traderTypeResult.rows || traderTypeResult || [],
-        contactStats: contactStats.rows || contactStats || [],
-        dailyTrend: dailyTrend.rows || dailyTrend || [],
-        users: maskedUsers,
-      });
+      res.json(await getExternalStats());
     } catch (err) {
       console.error("[external] stats error:", err);
       res.status(500).json({ message: "获取统计失败" });

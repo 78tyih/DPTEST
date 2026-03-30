@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Home, X, UserPlus, LogIn, MessageCircle } from "lucide-react";
+import { Camera, Home, X, LogIn, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import RadarChartComponent from "@/components/RadarChart";
 import ShareCard from "@/components/ShareCard";
@@ -463,6 +463,21 @@ function CharacterCardReveal({ result, onDone, tier = 0 }: { result: QuizResult;
           )}
         </div>
       )}
+
+      {/* 跳过动画按钮 — 动画进行中显示 */}
+      {!ready && (
+        <motion.button
+          onClick={onDone}
+          className="absolute top-6 right-6 text-xs px-3 py-1.5 rounded-lg z-50 transition-all"
+          style={{ color: 'var(--text-muted)', border: '1px solid var(--border)', background: 'rgba(0,0,0,0.3)' }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.5 }}
+          whileHover={{ opacity: 1, background: 'rgba(255,255,255,0.1)' }}
+        >
+          跳过 →
+        </motion.button>
+      )}
     </motion.div>
   );
 }
@@ -526,10 +541,10 @@ export default function ResultPage({ result }: ResultPageProps) {
   const [c1] = traderType.colors;
   const cc = traderType.cardColors;
 
-  // 未登录用户延迟弹出登录框（等用户看完内容再弹）
+  // 未登录用户：开箱结束后 3 秒弹登录框（比原来 10 秒快，减少截图走人）
   useEffect(() => {
     if (!user && !showUnbox) {
-      const timer = setTimeout(() => setShowLoginModal(true), 10000);
+      const timer = setTimeout(() => setShowLoginModal(true), 3000);
       return () => clearTimeout(timer);
     }
   }, [user, showUnbox]);
@@ -561,15 +576,18 @@ export default function ResultPage({ result }: ResultPageProps) {
             rankName: rank.name,
           }),
           credentials: "include",
-        }).then(() => {
+        }).then(async (res) => {
+          if (!res.ok) throw new Error("save failed");
           setResultSaved(true);
           sessionStorage.setItem("quiz_result_saved", "true");
           queryClient.invalidateQueries({ queryKey: ["/api/quiz-result"] });
           queryClient.invalidateQueries({ queryKey: ["/api/me"] });
-        }).catch(() => {});
+        }).catch(() => {
+          toast({ title: "结果保存失败，请刷新页面重试", variant: "destructive" });
+        });
       }
     }
-  }, [user, resultSaved, normalizedScores, traderType, avgScore, rank]);
+  }, [user, resultSaved, normalizedScores, traderType, avgScore, rank, toast]);
 
   const handleLoginSuccess = useCallback(() => {
     setShowLoginModal(false);
@@ -685,7 +703,7 @@ export default function ResultPage({ result }: ResultPageProps) {
                 免费咨询专属顾问
               </motion.button>
               <p className="text-[10px] text-center mt-2" style={{ color: 'var(--text-muted)' }}>
-                AI 顾问 24 小时在线 · 人工顾问实时响应
+                AI 顾问 24 小时在线 · 随时可转接真人顾问
               </p>
             </motion.div>
 
@@ -786,14 +804,34 @@ export default function ResultPage({ result }: ResultPageProps) {
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-strong)' }}>
                 ⚠️ 致命盲区
               </h3>
-              <div className="space-y-2">
-                {traderType.blindSpots.map((b, i) => (
-                  <div key={i} className="flex items-start gap-2 text-sm" style={{ color: 'var(--text)' }}>
-                    <span style={{ color: 'var(--warning)' }} className="mt-0.5 flex-shrink-0">!</span>
-                    <span>{b}</span>
+              {user ? (
+                <div className="space-y-2">
+                  {traderType.blindSpots.map((b, i) => (
+                    <div key={i} className="flex items-start gap-2 text-sm" style={{ color: 'var(--text)' }}>
+                      <span style={{ color: 'var(--warning)' }} className="mt-0.5 flex-shrink-0">!</span>
+                      <span>{b}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="relative">
+                  <div className="space-y-2 filter blur-[6px] select-none pointer-events-none">
+                    {traderType.blindSpots.slice(0, 2).map((b, i) => (
+                      <div key={i} className="flex items-start gap-2 text-sm" style={{ color: 'var(--text)' }}>
+                        <span style={{ color: 'var(--warning)' }} className="mt-0.5 flex-shrink-0">!</span>
+                        <span>{b}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                  <button
+                    onClick={() => setShowLoginModal(true)}
+                    className="mt-3 w-full py-2.5 rounded-xl text-sm font-medium transition-all"
+                    style={{ background: 'var(--primary)', color: '#fff' }}
+                  >
+                    🔓 登录解锁完整报告
+                  </button>
+                </div>
+              )}
             </motion.div>
 
             <motion.div
@@ -806,9 +844,24 @@ export default function ResultPage({ result }: ResultPageProps) {
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-strong)' }}>
                 💡 个性化提升路径
               </h3>
-              <p className="text-sm leading-[1.8]" style={{ color: 'var(--text)' }}>
-                {traderType.advice}
-              </p>
+              {user ? (
+                <p className="text-sm leading-[1.8]" style={{ color: 'var(--text)' }}>
+                  {traderType.advice}
+                </p>
+              ) : (
+                <div className="relative">
+                  <p className="text-sm leading-[1.8] filter blur-[6px] select-none pointer-events-none" style={{ color: 'var(--text)' }}>
+                    {traderType.advice}
+                  </p>
+                  <button
+                    onClick={() => setShowLoginModal(true)}
+                    className="mt-3 w-full py-2.5 rounded-xl text-sm font-medium transition-all"
+                    style={{ background: 'var(--primary)', color: '#fff' }}
+                  >
+                    🔓 登录查看专属建议
+                  </button>
+                </div>
+              )}
             </motion.div>
 
             <motion.div
@@ -853,16 +906,16 @@ export default function ResultPage({ result }: ResultPageProps) {
                 onClick={() => user ? navigate("/home") : setShowLoginModal(true)}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="py-3 px-4 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-all duration-200"
+                className={`${user ? 'py-3 px-4' : 'flex-1 py-3'} rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-all duration-200`}
                 style={{
-                  background: 'transparent',
-                  border: `1px solid ${user ? 'var(--gold)' : 'var(--border)'}`,
-                  color: user ? 'var(--gold)' : 'var(--text-muted)',
+                  background: user ? 'transparent' : 'var(--primary)',
+                  border: `1px solid ${user ? 'var(--gold)' : 'var(--primary)'}`,
+                  color: user ? 'var(--gold)' : '#FFFFFF',
                 }}
                 data-testid="button-go-home"
               >
                 {user ? <Home className="w-4 h-4" /> : <LogIn className="w-4 h-4" />}
-                {user && <span>首页</span>}
+                <span>{user ? '首页' : '登录 / 注册'}</span>
               </motion.button>
               <motion.button
                 onClick={() => setShowShareModal(true)}
@@ -930,28 +983,6 @@ export default function ResultPage({ result }: ResultPageProps) {
               <CharacterCardPanel result={result} onClose={() => setShowCardPanel(false)} tier={user?.tier ?? 0} />
             )}
           </AnimatePresence>
-
-          {!user && (
-            <motion.div
-              initial={{ y: 60, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.5, ...ease }}
-              className="fixed bottom-0 left-0 right-0 z-40 px-4 pb-5 pt-3"
-              style={{ background: 'linear-gradient(to top, #0D0F14 60%, transparent)' }}
-            >
-              <motion.button
-                onClick={() => setShowLoginModal(true)}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="w-full max-w-lg md:max-w-2xl mx-auto py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 text-white transition-all duration-200"
-                style={{ background: 'var(--primary)' }}
-                data-testid="button-login-prompt"
-              >
-                <UserPlus className="w-4 h-4" />
-                登录 / 注册以保存结果
-              </motion.button>
-            </motion.div>
-          )}
 
           <LoginModal
             open={showLoginModal}

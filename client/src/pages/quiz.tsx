@@ -20,6 +20,12 @@ export default function QuizPage({ onComplete }: QuizPageProps) {
   const xpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { trackEvent } = useTracking();
   usePageView("quiz_start");
+
+  // 防止用户意外离开丢失进度
+  const answeredCount = answers.length;
+  if (typeof window !== 'undefined') {
+    window.onbeforeunload = answeredCount > 0 && answeredCount < questions.length ? () => "测评进度将丢失，确定离开吗？" : null;
+  }
   const ghostType = useMemo(() => ghostTypes[Math.floor(Math.random() * ghostTypes.length)], []);
 
   const handleSelect = useCallback((optionIndex: number) => {

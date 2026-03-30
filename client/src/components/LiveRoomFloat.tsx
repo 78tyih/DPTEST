@@ -464,7 +464,7 @@ export default function LiveRoomFloat() {
   return (
     <motion.div
       ref={containerRef}
-      className="fixed left-0 z-[90]"
+      className="fixed left-0 z-30"
       style={{ top: isMobile ? '45%' : '40%', y: springY }}
       drag="y"
       dragConstraints={{ top: isMobile ? -200 : -250, bottom: isMobile ? 200 : 250 }}

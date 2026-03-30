@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Lock, Plus, Trash2, Activity, Power, PowerOff, RefreshCw, Shield, ArrowLeft, X, BarChart3, Eye, UserPlus, MessageSquare, Users, TrendingUp, Pencil, Check, Clock, Copy, Search, Download, Phone, User } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Lock, Plus, Trash2, Activity, Power, PowerOff, RefreshCw, Shield, ArrowLeft, X, BarChart3, Eye, UserPlus, MessageSquare, Users, TrendingUp, Pencil, Check, Clock, Copy, Search, Download, Phone, User, ChevronRight, Target, Lightbulb, AlertTriangle, Zap } from "lucide-react";
+import { traderTypes, rankTiers } from "@/data/traderTypes";
+import { dimensionLabels, type Dimension } from "@/data/questions";
 import { useToast } from "@/hooks/use-toast";
 
 interface SalesContact {
@@ -67,12 +69,19 @@ interface StatsData {
   hourlyDistribution: HourlyData[];
 }
 
+interface UserTags {
+  notes?: string;
+  status?: string;
+  labels?: string[];
+}
+
 interface AdminUser {
   id: number;
   phone: string;
   nickname: string | null;
   wechat_id: string | null;
   source: string | null;
+  tags: UserTags | null;
   tier: number;
   login_days: number;
   last_login_date: string | null;
@@ -81,6 +90,7 @@ interface AdminUser {
   trader_type_code: string | null;
   avg_score: number | null;
   rank_name: string | null;
+  scores: Record<string, number> | null;
   quiz_completed_at: string | null;
 }
 
@@ -115,13 +125,13 @@ function StatCard({ icon: Icon, label, value, subValue, color }: {
         <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${color}15` }}>
           <Icon className="w-4 h-4" style={{ color }} />
         </div>
-        <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{label}</span>
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</span>
       </div>
       <div className="text-xl font-bold" style={{ color: 'var(--text-strong)' }} data-testid={`stat-${label}`}>
         {value}
       </div>
       {subValue && (
-        <div className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>{subValue}</div>
+        <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{subValue}</div>
       )}
     </div>
   );
@@ -154,7 +164,7 @@ function FunnelChart({ funnel }: { funnel: FunnelData }) {
                 <div className="flex items-center gap-2">
                   <span className="text-xs" style={{ color: 'var(--text-strong)' }}>{step.label}</span>
                   {convRate && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)' }}>
+                    <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)' }}>
                       {convRate}%
                     </span>
                   )}
@@ -200,9 +210,9 @@ function TraderTypeChart({ types }: { types: TraderType[] }) {
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-medium" style={{ color }}>{t.type_code}</span>
-                  <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{name}</span>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{name}</span>
                 </div>
-                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{count} ({pct}%)</span>
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{count} ({pct}%)</span>
               </div>
               <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)' }}>
                 <motion.div
@@ -253,11 +263,11 @@ function HourlyChart({ data }: { data: HourlyData[] }) {
         })}
       </div>
       <div className="flex justify-between mt-1">
-        <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>0:00</span>
-        <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>6:00</span>
-        <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>12:00</span>
-        <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>18:00</span>
-        <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>23:00</span>
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>0:00</span>
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>6:00</span>
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>12:00</span>
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>18:00</span>
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>23:00</span>
       </div>
     </div>
   );
@@ -365,7 +375,7 @@ function StatsPanel({ stats, loading }: { stats: StatsData | null; loading: bool
           </div>
           <div className="space-y-1.5">
             {stats.dailyTrend.slice(0, 7).map((d) => (
-              <div key={d.date} className="flex items-center gap-3 text-[11px]" data-testid={`stat-day-${d.date}`}>
+              <div key={d.date} className="flex items-center gap-3 text-xs" data-testid={`stat-day-${d.date}`}>
                 <span className="w-20 shrink-0" style={{ color: 'var(--text-muted)' }}>
                   {new Date(d.date).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}
                 </span>
@@ -384,13 +394,13 @@ function StatsPanel({ stats, loading }: { stats: StatsData | null; loading: bool
             ))}
           </div>
           <div className="flex items-center gap-4 mt-2 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-            <div className="flex items-center gap-1 text-[10px]" style={{ color: '#3B82F6' }}>
+            <div className="flex items-center gap-1 text-xs" style={{ color: '#3B82F6' }}>
               <div className="w-2 h-2 rounded-full" style={{ background: '#3B82F6' }} /> 浏览
             </div>
-            <div className="flex items-center gap-1 text-[10px]" style={{ color: '#07C160' }}>
+            <div className="flex items-center gap-1 text-xs" style={{ color: '#07C160' }}>
               <div className="w-2 h-2 rounded-full" style={{ background: '#07C160' }} /> 注册
             </div>
-            <div className="flex items-center gap-1 text-[10px]" style={{ color: '#F59E0B' }}>
+            <div className="flex items-center gap-1 text-xs" style={{ color: '#F59E0B' }}>
               <div className="w-2 h-2 rounded-full" style={{ background: '#F59E0B' }} /> 添加客服
             </div>
           </div>
@@ -402,10 +412,459 @@ function StatsPanel({ stats, loading }: { stats: StatsData | null; loading: bool
 
 const TIER_NAMES: Record<number, string> = { 0: "学徒", 1: "交易者", 2: "精英", 3: "职业操盘手" };
 
+const DIMENSION_KEYS: Dimension[] = ['EDGE', 'EXEC', 'RISK', 'ADAPT', 'MENTAL', 'SYSTEM'];
+
+// 每种交易者类型对应的销售切入策略
+const SALES_STRATEGIES: Record<string, { opener: string; painPoint: string; courseValue: string; reminder: string }> = {
+  RA: {
+    opener: "你的风控底子很好，适应力也强，这在大部分交易者里已经很稀缺了",
+    painPoint: "你现在最缺的是一个有硬逻辑支撑的入场体系 — 不是感觉「差不多了」就进场，而是有量化的证据告诉你这里该进",
+    courseValue: "我们的方法论就是帮你把「差不多」变成「确定」，用资金流数据给你一个客观的确认信号",
+    reminder: "跟你做什么市场没关系，不管内盘外盘都能用，订单流的本质是理解大资金的行为",
+  },
+  EAv: {
+    opener: "你的盘感和适应力很强，这是真正的天赋",
+    painPoint: "好的交易你说不出理由，坏的交易也说不出哪里错了，这样你就没法稳定输出",
+    courseValue: "我们的课程能帮你把直觉量化 — 你现在凭感觉看到的东西，用订单流能看到客观的证据。不是取代你的直觉，而是给你的直觉加一个验证工具",
+    reminder: "很多高阶量价策略有论文支撑，不是玄学",
+  },
+  ES: {
+    opener: "你的分析框架和系统化程度在评测里很突出",
+    painPoint: "分析对了不等于赚钱了。你是不是经常遇到「大方向对了但入场时机差一点」的情况？",
+    courseValue: "你需要的不是更多分析，而是一个微观级别的入场工具。订单流能让你的宏观判断在K线级别找到精确的切入点",
+    reminder: "订单流很适合中长线，不是只能做日内。你有系统思维的底子，加上精确工具就是如虎添翼",
+  },
+  RS: {
+    opener: "你是风控和系统化双高的类型，这已经超过大部分交易者了",
+    painPoint: "你有没有觉得自己「活得久」但「赚得少」？防守已经满分了，现在需要升级进攻",
+    courseValue: "我们帮你在现有系统里加一个进攻维度 — 用资金流看到大钱在哪里，让你敢于在有把握时加码",
+    reminder: "这不是让你冒更大的风险，而是让你在同样的风险预算下找到更好的机会",
+  },
+  SE: {
+    opener: "你的执行力和系统化程度很高，是少数能做到「知行合一」的人",
+    painPoint: "系统连续亏损时你还在执行，后来才发现市场环境已经变了？",
+    courseValue: "你需要给系统加一个大环境过滤器。订单流能帮你判断当前市场的资金流动状态，让你的系统在对的环境下运行",
+    reminder: "很多机构交易员就是这样用订单流的，不是用来做短线，而是用来判断市场状态",
+  },
+  RM: {
+    opener: "你在风控和心态上的得分很高，这两项是交易的地基，你的地基很稳",
+    painPoint: "地基稳不代表房子会自己长起来。该做的都做了，为什么账户还是不涨？",
+    courseValue: "你缺的就是一个进攻武器。我们的课程从方法论层面帮你建立一套有逻辑的入场体系",
+    reminder: "你的心态已经是做中长线的理想状态，订单流能帮你在大级别找到最佳入场点",
+  },
+  ER: {
+    opener: "你的认知格局和风控意识在评测中很突出",
+    painPoint: "看对了方向、止损也设了，就是入场点差那么一点，被止损打掉后行情就启动了？",
+    courseValue: "你不需要更多分析，你需要精确定位入场点的工具。订单流就是帮你在微观层面找到那个「差一点」的答案",
+    reminder: "大方向+精确入场=完整的交易闭环",
+  },
+  AS: {
+    opener: "你兼具系统化思维和灵活性，这个组合很稀缺",
+    painPoint: "回测和实盘之间总有差距？可能不是系统不够好，而是你的输入数据不够精确",
+    courseValue: "订单流能给你的系统加一个更高维度的数据源 — 从成交量和资金行为层面看市场，比纯K线形态可靠得多",
+    reminder: "给你的系统加一个「冷冻期」— 至少运行100笔不修改，用真实数据验证",
+  },
+  ME: {
+    opener: "你的执行力和心态在评测里排名靠前",
+    painPoint: "做得多但算下来不赚钱，交易频率和胜率不成正比？减少50%的交易次数是不是反而赚得更多？",
+    courseValue: "我们的方法论能帮你识别哪些信号值得出手、哪些应该放过，让你的快手不再是快刀乱斩",
+    reminder: "速度是你的武器，但需要一个过滤器 — 不是每个快球都要接",
+  },
+  MA: {
+    opener: "你的心态和适应力很强，什么市场环境都能找到节奏",
+    painPoint: "什么方法都懂一点，但没有一个是真正精通的，缺一个「一招鲜」",
+    courseValue: "我们的课程体系帮你建立一个以资金流为核心的方法论，不用再到处找新策略",
+    reminder: "300笔以上的回测能告诉你，哪个才是你真正的优势策略",
+  },
+  EM: {
+    opener: "坦诚地说，现在是交易者最危险的阶段 — 知道一些但不够系统",
+    painPoint: "不系统的知识反而会让你做出更多错误的决定",
+    courseValue: "现在建立正确的框架，比带着错误习惯走三年更好。我们不只是教工具，而是帮你从零建立一套完整的交易方法论",
+    reminder: "我们是一套市场方法论+交易员培训全案，不只是教一个工具",
+  },
+  RE: {
+    opener: "你的纪律和执行力没问题",
+    painPoint: "但你执行的那套策略真的有正期望吗？严格执行的可能不是一个好系统",
+    courseValue: "我们帮你用数据验证和升级你的系统，300笔以上的盲测能告诉你答案",
+    reminder: "纪律+好系统=持续盈利",
+  },
+  EA: {
+    opener: "你不缺执行力，什么行情都敢做",
+    painPoint: "同时关注太多品种和时间框架，注意力分散，重仓的反而不是准备最充分的",
+    courseValue: "我们帮你在一个方法论上深耕，不再东一榔头西一棒子",
+    reminder: "聚焦一个方法，把速度和适应力集中到一个点上",
+  },
+  EX: {
+    opener: "你天生就是做大行情的人，趋势判断+执行力的组合很强",
+    painPoint: "两次大行情之间的震荡期里，赚来的钱又亏回去了不少？",
+    courseValue: "你缺的是一个「行情类型识别器」— 在趋势不明时降低仓位，订单流能帮你判断现在是趋势还是震荡",
+    reminder: "订单流不只是看短线，更能帮你判断行情的大节奏",
+  },
+  SM: {
+    opener: "你将理性的系统思维和强大的心理素质完美结合",
+    painPoint: "分析经常是对的，但账户没有反映出分析水平。从判断到执行之间有一段距离还没跨过去",
+    courseValue: "给自己设一个决策时间限制 — 分析到80分就执行，我们的工具能给你一个客观的「够了，该动手了」的信号",
+    reminder: "完美主义是交易的敌人，80分的执行胜过100分的计划",
+  },
+};
+
+function getWeakestDimension(scores: Record<string, number> | null): { key: Dimension; label: string; score: number } | null {
+  if (!scores) return null;
+  let min: { key: Dimension; label: string; score: number } | null = null;
+  for (const k of DIMENSION_KEYS) {
+    const s = scores[k];
+    if (s != null && (!min || s < min.score)) {
+      min = { key: k, label: dimensionLabels[k], score: s };
+    }
+  }
+  return min;
+}
+
+function getStrongestDimension(scores: Record<string, number> | null): { key: Dimension; label: string; score: number } | null {
+  if (!scores) return null;
+  let max: { key: Dimension; label: string; score: number } | null = null;
+  for (const k of DIMENSION_KEYS) {
+    const s = scores[k];
+    if (s != null && (!max || s > max.score)) {
+      max = { key: k, label: dimensionLabels[k], score: s };
+    }
+  }
+  return max;
+}
+
+function ScoreBar({ label, score, color }: { label: string; score: number; color: string }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</span>
+        <span className="text-xs font-bold" style={{ color }}>{score}</span>
+      </div>
+      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${score}%` }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="h-full rounded-full"
+          style={{ background: color }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; onClose: () => void; onTagsUpdate?: (userId: number, tags: UserTags) => void }) {
+  const { toast } = useToast();
+  const scores = user.scores;
+  const typeCode = user.trader_type_code;
+  const typeInfo = typeCode ? traderTypes[typeCode] : null;
+  const strategy = typeCode ? SALES_STRATEGIES[typeCode] : null;
+  const weakest = getWeakestDimension(scores);
+  const strongest = getStrongestDimension(scores);
+  const rank = rankTiers.find(r => user.avg_score != null && user.avg_score >= r.minScore && user.avg_score <= r.maxScore);
+
+  const [notes, setNotes] = useState(user.tags?.notes || "");
+  const [followStatus, setFollowStatus] = useState(user.tags?.status || "new");
+  const [saving, setSaving] = useState(false);
+
+  const STATUS_OPTIONS = [
+    { value: "new", label: "新客户", color: "#3B82F6" },
+    { value: "contacted", label: "已联系", color: "#F59E0B" },
+    { value: "following", label: "跟进中", color: "#8B5CF6" },
+    { value: "trial", label: "试听中", color: "#14B8A6" },
+    { value: "converted", label: "已成交", color: "#07C160" },
+    { value: "lost", label: "已流失", color: "#6B7280" },
+  ];
+
+  const saveTags = useCallback(async (newStatus?: string) => {
+    setSaving(true);
+    const tags: UserTags = { notes, status: newStatus || followStatus, labels: user.tags?.labels || [] };
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/tags`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tags }),
+        credentials: "include",
+      });
+      if (res.ok) {
+        toast({ title: "已保存" });
+        onTagsUpdate?.(user.id, tags);
+      }
+    } catch { toast({ title: "保存失败", variant: "destructive" }); }
+    setSaving(false);
+  }, [notes, followStatus, user, toast, onTagsUpdate]);
+
+  const generateWechatNote = useCallback(() => {
+    const lines: string[] = [];
+    lines.push(`【${user.phone}】`);
+    if (typeInfo) lines.push(`${typeInfo.icon} ${typeInfo.name}（${typeInfo.subtitle}）`);
+    if (user.avg_score != null && rank) lines.push(`${rank.icon} ${rank.name} ${user.avg_score}分`);
+    if (strongest && weakest) lines.push(`强项：${strongest.label}${strongest.score} / 弱项：${weakest.label}${weakest.score}`);
+    if (typeInfo) lines.push(`痛点：${typeInfo.piercingDescription.substring(0, 50)}...`);
+    if (strategy) lines.push(`切入：${strategy.opener.substring(0, 40)}...`);
+    if (notes) lines.push(`备注：${notes}`);
+    return lines.join('\n');
+  }, [user, typeInfo, rank, strongest, weakest, strategy, notes]);
+
+  const copyBrief = useCallback(async () => {
+    const text = generateWechatNote();
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "已复制，可粘贴到微信备注" });
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy");
+      document.body.removeChild(ta);
+      toast({ title: "已复制" });
+    }
+  }, [generateWechatNote, toast]);
+
+  const getScoreColor = (s: number) => {
+    if (s >= 70) return '#07C160';
+    if (s >= 50) return '#F59E0B';
+    return '#EF4444';
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end justify-center"
+      onClick={onClose}
+    >
+      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-2xl pb-8"
+        style={{ background: 'var(--bg-0)', border: '1px solid var(--border)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* 拖拽指示条 */}
+        <div className="sticky top-0 pt-3 pb-2 flex justify-center" style={{ background: 'var(--bg-0)', zIndex: 1 }}>
+          <div className="w-10 h-1 rounded-full" style={{ background: 'rgba(255,255,255,0.15)' }} />
+        </div>
+
+        <div className="px-5 space-y-5">
+          {/* 头部：用户基本信息 */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {typeInfo && <span className="text-2xl">{typeInfo.icon}</span>}
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-base font-bold" style={{ color: 'var(--text-strong)' }}>
+                    {user.phone}
+                  </span>
+                  {rank && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${rank.color}20`, color: rank.color }}>
+                      {rank.icon} {rank.name}
+                    </span>
+                  )}
+                </div>
+                {typeInfo && (
+                  <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    {typeInfo.name} · {typeInfo.subtitle} · {user.avg_score}分
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={copyBrief} className="h-8 px-3 rounded-lg flex items-center gap-1.5 text-xs font-medium" style={{ background: 'rgba(var(--gold-rgb), 0.12)', color: 'var(--gold)' }}>
+                <Copy className="w-3.5 h-3.5" />
+                复制备注
+              </button>
+              <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                <X className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+              </button>
+            </div>
+          </div>
+
+          {/* 跟进状态 + 备注 */}
+          <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center gap-2 mb-3">
+              <Pencil className="w-4 h-4" style={{ color: 'var(--gold)' }} />
+              <span className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>销售跟进</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {STATUS_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => { setFollowStatus(opt.value); saveTags(opt.value); }}
+                  className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
+                  style={{
+                    background: followStatus === opt.value ? `${opt.color}20` : 'rgba(255,255,255,0.04)',
+                    color: followStatus === opt.value ? opt.color : 'var(--text-muted)',
+                    border: `1px solid ${followStatus === opt.value ? `${opt.color}40` : 'transparent'}`,
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="添加备注（客户情况、沟通记录等）..."
+              rows={3}
+              className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', color: 'var(--text-strong)' }}
+            />
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                备注会保存到数据库，方便下次查看
+              </span>
+              <button
+                onClick={() => saveTags()}
+                disabled={saving}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium"
+                style={{ background: 'var(--gold)', color: '#000' }}
+              >
+                {saving ? "保存中..." : "保存备注"}
+              </button>
+            </div>
+          </div>
+
+          {/* 一句话描述 */}
+          {typeInfo && (
+            <div className="rounded-xl p-4" style={{ background: `${typeInfo.cardColors.primary}15`, border: `1px solid ${typeInfo.cardColors.primary}30` }}>
+              <p className="text-sm font-medium" style={{ color: typeInfo.cardColors.primary }}>
+                "{typeInfo.oneLiner}"
+              </p>
+              <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                {typeInfo.description}
+              </p>
+            </div>
+          )}
+
+          {/* 六维评分 */}
+          {scores && (
+            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+              <div className="flex items-center gap-2 mb-3">
+                <BarChart3 className="w-4 h-4" style={{ color: 'var(--gold)' }} />
+                <span className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>六维评分</span>
+                {strongest && weakest && (
+                  <span className="text-xs ml-auto" style={{ color: 'var(--text-muted)' }}>
+                    最强 {strongest.label} {strongest.score} / 最弱 {weakest.label} {weakest.score}
+                  </span>
+                )}
+              </div>
+              <div className="space-y-2.5">
+                {DIMENSION_KEYS.map(k => (
+                  <ScoreBar key={k} label={dimensionLabels[k]} score={scores[k] ?? 0} color={getScoreColor(scores[k] ?? 0)} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 灵魂拷问 */}
+          {typeInfo && (
+            <div className="rounded-xl p-4" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <Target className="w-4 h-4" style={{ color: '#EF4444' }} />
+                <span className="text-sm font-medium" style={{ color: '#EF4444' }}>客户核心痛点</span>
+              </div>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--text-strong)' }}>
+                {typeInfo.piercingDescription}
+              </p>
+            </div>
+          )}
+
+          {/* 销售策略 */}
+          {strategy && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4" style={{ color: 'var(--gold)' }} />
+                <span className="text-sm font-bold" style={{ color: 'var(--gold)' }}>销售攻略</span>
+              </div>
+
+              <div className="rounded-xl p-4" style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)' }}>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <MessageSquare className="w-3.5 h-3.5" style={{ color: '#3B82F6' }} />
+                  <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>开场白</span>
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-strong)' }}>
+                  "{strategy.opener}"
+                </p>
+              </div>
+
+              <div className="rounded-xl p-4" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)' }}>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" style={{ color: '#EF4444' }} />
+                  <span className="text-xs font-medium" style={{ color: '#EF4444' }}>戳痛点</span>
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-strong)' }}>
+                  "{strategy.painPoint}"
+                </p>
+              </div>
+
+              <div className="rounded-xl p-4" style={{ background: 'rgba(7,193,96,0.06)', border: '1px solid rgba(7,193,96,0.15)' }}>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Lightbulb className="w-3.5 h-3.5" style={{ color: '#07C160' }} />
+                  <span className="text-xs font-medium" style={{ color: '#07C160' }}>课程价值</span>
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-strong)' }}>
+                  "{strategy.courseValue}"
+                </p>
+              </div>
+
+              <div className="rounded-xl p-4" style={{ background: 'rgba(var(--gold-rgb), 0.06)', border: '1px solid rgba(var(--gold-rgb), 0.15)' }}>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" style={{ color: 'var(--gold)' }} />
+                  <span className="text-xs font-medium" style={{ color: 'var(--gold)' }}>重要提醒</span>
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-strong)' }}>
+                  {strategy.reminder}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* 优势与盲区 */}
+          {typeInfo && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl p-3" style={{ background: 'rgba(7,193,96,0.06)', border: '1px solid rgba(7,193,96,0.15)' }}>
+                <span className="text-xs font-medium" style={{ color: '#07C160' }}>优势</span>
+                <ul className="mt-1.5 space-y-1">
+                  {typeInfo.strengths.map((s, i) => (
+                    <li key={i} className="text-xs leading-relaxed" style={{ color: 'var(--text-strong)' }}>• {s}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-xl p-3" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)' }}>
+                <span className="text-xs font-medium" style={{ color: '#EF4444' }}>盲区</span>
+                <ul className="mt-1.5 space-y-1">
+                  {typeInfo.blindSpots.map((s, i) => (
+                    <li key={i} className="text-xs leading-relaxed" style={{ color: 'var(--text-strong)' }}>• {s}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* 通用提醒 */}
+          <div className="rounded-xl p-4" style={{ background: 'rgba(var(--gold-rgb), 0.04)', border: '1px solid rgba(var(--gold-rgb), 0.1)' }}>
+            <span className="text-xs font-bold block mb-2" style={{ color: 'var(--gold)' }}>销售必读</span>
+            <ul className="space-y-1.5 text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+              <li>• 不要把订单流和特定品种/市场挂钩，我们是<b style={{ color: 'var(--text-strong)' }}>方法论+培训全案</b></li>
+              <li>• 订单流<b style={{ color: 'var(--text-strong)' }}>适合中长线</b>，不只是日内，很多策略有学术论文支撑</li>
+              <li>• 外盘/内盘/大A/美股都能用，内盘期货和大A产品正在推出</li>
+              <li>• 市场上用订单流的人很少 = <b style={{ color: 'var(--text-strong)' }}>稀缺优势</b></li>
+            </ul>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading: boolean; onRefresh: () => void }) {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
 
   const filtered = users.filter(u => {
     if (!search) return true;
@@ -447,7 +906,18 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
       if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
       return s;
     };
-    const header = "ID,手机号,昵称,微信号,来源,阶段,登录天数,交易者类型,综合评分,注册时间,测评时间,最后活跃";
+    const DIMENSION_NAMES: Record<string, string> = {
+      EDGE: "认知格局", EXEC: "执行力", RISK: "风险管理",
+      ADAPT: "市场适应", MENTAL: "交易心理", SYSTEM: "系统思维",
+    };
+    const DIMENSIONS = ["EDGE", "EXEC", "RISK", "ADAPT", "MENTAL", "SYSTEM"];
+    const getWeakest = (scores: Record<string, number> | null) => {
+      if (!scores) return "";
+      const entries = DIMENSIONS.map(d => [d, scores[d] ?? 999] as const);
+      const min = entries.reduce((a, b) => a[1] <= b[1] ? a : b);
+      return DIMENSION_NAMES[min[0]] || min[0];
+    };
+    const header = "ID,手机号,昵称,微信号,来源,阶段,登录天数,交易者���型,综合评分,认知格局,执行力,风险管理,市场适应,交易心理,��统思维,薄弱维度,注册时间,测评时间,最��活跃";
     const rows = filtered.map(u => [
       u.id,
       escapeCSV(u.phone),
@@ -458,6 +928,13 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
       u.login_days,
       escapeCSV(u.trader_type_code ? (TRADER_TYPE_NAMES[u.trader_type_code] || u.trader_type_code) : ""),
       u.avg_score ?? "",
+      u.scores?.EDGE ?? "",
+      u.scores?.EXEC ?? "",
+      u.scores?.RISK ?? "",
+      u.scores?.ADAPT ?? "",
+      u.scores?.MENTAL ?? "",
+      u.scores?.SYSTEM ?? "",
+      escapeCSV(getWeakest(u.scores)),
       u.created_at ? new Date(u.created_at).toLocaleDateString("zh-CN") : "",
       u.quiz_completed_at ? new Date(u.quiz_completed_at).toLocaleDateString("zh-CN") : "",
       u.last_active_at ? new Date(u.last_active_at).toLocaleDateString("zh-CN") : "",
@@ -512,7 +989,7 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
         </button>
       </div>
 
-      <div className="text-[11px] flex items-center justify-between" style={{ color: 'var(--text-muted)' }}>
+      <div className="text-xs flex items-center justify-between" style={{ color: 'var(--text-muted)' }}>
         <span>共 {filtered.length} 位客户{search && ` (筛选自 ${users.length})`}</span>
         <button onClick={onRefresh} disabled={loading} className="flex items-center gap-1" data-testid="button-refresh-users">
           <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
@@ -526,35 +1003,52 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{search ? "未找到匹配客户" : "暂无客户数据"}</p>
           </div>
         ) : (
-          filtered.map(u => (
+          filtered.map(u => {
+            const uType = u.trader_type_code ? traderTypes[u.trader_type_code] : null;
+            return (
             <div
               key={u.id}
-              className="rounded-xl p-3"
+              className="rounded-xl p-3 cursor-pointer transition-all active:scale-[0.98]"
               style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}
               data-testid={`user-card-${u.id}`}
+              onClick={() => u.trader_type_code && setSelectedUser(u)}
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(var(--gold-rgb), 0.1)' }}>
-                    <User className="w-4 h-4" style={{ color: 'var(--gold)' }} />
+                    {uType ? <span className="text-base">{uType.icon}</span> : <User className="w-4 h-4" style={{ color: 'var(--gold)' }} />}
                   </div>
                   <div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>
-                        {u.nickname || "未设置昵称"}
+                        {u.nickname || u.phone}
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(var(--gold-rgb), 0.1)', color: 'var(--gold)' }}>
-                        {TIER_NAMES[u.tier] || `T${u.tier}`}
-                      </span>
+                      {uType && (
+                        <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: `${uType.cardColors.primary}15`, color: uType.cardColors.primary }}>
+                          {uType.name}
+                        </span>
+                      )}
                     </div>
-                    <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      注册 {formatDate(u.created_at)}
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      {u.avg_score != null ? `${u.avg_score}分 · ` : ''}注册 {formatDate(u.created_at)}
                     </div>
                   </div>
                 </div>
-                <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)' }}>
-                  #{u.id}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  {u.tags?.status && u.tags.status !== 'new' && (() => {
+                    const st = [
+                      { value: "contacted", label: "已联系", color: "#F59E0B" },
+                      { value: "following", label: "跟进中", color: "#8B5CF6" },
+                      { value: "trial", label: "试听中", color: "#14B8A6" },
+                      { value: "converted", label: "已成交", color: "#07C160" },
+                      { value: "lost", label: "已流失", color: "#6B7280" },
+                    ].find(s => s.value === u.tags?.status);
+                    return st ? <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: `${st.color}20`, color: st.color }}>{st.label}</span> : null;
+                  })()}
+                  {u.trader_type_code && (
+                    <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                  )}
+                </div>
               </div>
 
               <div className="space-y-1.5 ml-10">
@@ -562,16 +1056,22 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
                 {u.wechat_id && (
                   <CopyRow icon={<MessageSquare className="w-3 h-3" />} label="微信" value={u.wechat_id} onCopy={copyText} copiedId={copiedId} />
                 )}
-                {u.trader_type_code && (
-                  <div className="flex items-center gap-2 text-[11px]">
-                    <span style={{ color: 'var(--text-muted)' }}>类型</span>
-                    <span style={{ color: 'var(--primary)' }}>{TRADER_TYPE_NAMES[u.trader_type_code] || u.trader_type_code}</span>
-                    {u.avg_score != null && (
-                      <span style={{ color: 'var(--gold)' }}>{u.avg_score}分</span>
-                    )}
+                {u.scores && (
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    {DIMENSION_KEYS.map(k => {
+                      const s = u.scores![k] ?? 0;
+                      const color = s >= 70 ? '#07C160' : s >= 50 ? '#F59E0B' : '#EF4444';
+                      return (
+                        <div key={k} className="flex-1">
+                          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                            <div className="h-full rounded-full" style={{ background: color, width: `${s}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
-                <div className="flex items-center gap-3 text-[11px] flex-wrap" style={{ color: 'var(--text-muted)' }}>
+                <div className="flex items-center gap-3 text-xs flex-wrap" style={{ color: 'var(--text-muted)' }}>
                   <span data-testid={`text-login-days-${u.id}`}>登录 {u.login_days} 天</span>
                   {u.source && <span data-testid={`text-source-${u.id}`}>来源: {u.source}</span>}
                   {u.quiz_completed_at && <span data-testid={`text-quiz-date-${u.id}`}>测评 {formatDate(u.quiz_completed_at)}</span>}
@@ -579,9 +1079,21 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
                 </div>
               </div>
             </div>
-          ))
-        )}
+          );})
+          )}
       </div>
+
+      <AnimatePresence>
+        {selectedUser && (
+          <UserDetailDrawer
+            user={selectedUser}
+            onClose={() => setSelectedUser(null)}
+            onTagsUpdate={(userId, tags) => {
+              setSelectedUser(prev => prev && prev.id === userId ? { ...prev, tags } : prev);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -595,7 +1107,7 @@ function CopyRow({ icon, label, value, onCopy, copiedId }: {
 }) {
   const isCopied = copiedId === value;
   return (
-    <div className="flex items-center gap-2 text-[11px] group">
+    <div className="flex items-center gap-2 text-xs group">
       <span style={{ color: 'var(--text-muted)' }}>{icon}</span>
       <span style={{ color: 'var(--text-muted)' }}>{label}</span>
       <span
@@ -937,7 +1449,7 @@ function ContactCard({ contact, onUpdate, onDelete }: {
             </div>
             <p className="text-xs truncate mb-1" style={{ color: 'var(--text-muted)' }}>{contact.url}</p>
             {contact.lastHealthCheck && (
-              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                 上次检测: {new Date(contact.lastHealthCheck).toLocaleString('zh-CN')}
               </p>
             )}
@@ -980,7 +1492,7 @@ function ContactCard({ contact, onUpdate, onDelete }: {
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
-                  className="px-2 py-1 rounded text-[10px] font-medium"
+                  className="px-2 py-1 rounded text-xs font-medium"
                   style={{ background: '#EF4444', color: '#fff' }}
                   data-testid={`button-confirm-delete-${contact.id}`}
                 >
@@ -988,7 +1500,7 @@ function ContactCard({ contact, onUpdate, onDelete }: {
                 </button>
                 <button
                   onClick={() => setConfirmDelete(false)}
-                  className="px-2 py-1 rounded text-[10px]"
+                  className="px-2 py-1 rounded text-xs"
                   style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }}
                 >
                   取消
@@ -1123,7 +1635,7 @@ export default function AdminPage() {
   const deadCount = contacts.filter(c => c.lastHealthStatus === "dead" && c.enabled).length;
 
   return (
-    <div className="min-h-screen pb-12" style={{ background: 'var(--bg-0)' }}>
+    <div className="min-h-screen pb-12 admin-panel" style={{ background: 'var(--bg-0)', fontSize: '14px' }}>
       <div className="max-w-lg mx-auto px-5 pt-6">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
@@ -1220,7 +1732,7 @@ export default function AdminPage() {
 
             <div className="mt-8 p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
               <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-strong)' }}>自动监控</p>
-              <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                 系统每30分钟自动检测所有启用顾问的健康状态。当某个顾问从正常变为异常时，会自动通过企业微信群发送告警通知。
               </p>
             </div>
@@ -1238,7 +1750,7 @@ export default function AdminPage() {
               <button
                 onClick={fetchStats}
                 disabled={statsLoading}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px]"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs"
                 style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)' }}
                 data-testid="button-refresh-stats"
               >

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle, X, Send, Bot, User, Headphones } from "lucide-react";
+import { useLocation } from "wouter";
 import { useChat } from "@/hooks/use-chat";
 import { useAuth } from "@/lib/auth";
 
@@ -13,9 +14,16 @@ function getSessionId() {
   return id;
 }
 
+function shouldShow(path: string) {
+  if (path === "/home" || path === "/result") return true;
+  if (path.startsWith("/report/")) return true;
+  return false;
+}
+
 export default function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
+  const [location] = useLocation();
   const { user } = useAuth();
   const sessionId = useMemo(getSessionId, []);
   const { messages, status, connected, sendMessage } = useChat({
@@ -25,13 +33,23 @@ export default function ChatWidget() {
   });
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const visible = shouldShow(location);
+  const bottomInset = "max(1.5rem, env(safe-area-inset-bottom))";
 
   // 支持从外部打开聊天窗口（结果页按钮等）
   useEffect(() => {
-    const handler = () => setOpen(true);
+    const handler = () => {
+      if (visible) setOpen(true);
+    };
     window.addEventListener("open-chat-widget", handler);
     return () => window.removeEventListener("open-chat-widget", handler);
-  }, []);
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible) {
+      setOpen(false);
+    }
+  }, [visible]);
 
   // 自动滚到底
   useEffect(() => {
@@ -55,6 +73,8 @@ export default function ChatWidget() {
   const statusLabel = status === "human" ? "人工客服" : "AI 顾问";
   const StatusIcon = status === "human" ? Headphones : Bot;
 
+  if (!visible) return null;
+
   return (
     <>
       {/* 浮动按钮 */}
@@ -67,8 +87,9 @@ export default function ChatWidget() {
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setOpen(true)}
-            className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl"
+            className="fixed right-6 z-30 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl"
             style={{
+              bottom: bottomInset,
               background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
               boxShadow: "0 4px 20px rgba(102, 126, 234, 0.4)",
             }}
@@ -86,8 +107,9 @@ export default function ChatWidget() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed bottom-6 right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)] flex flex-col rounded-2xl overflow-hidden shadow-2xl"
+            className="fixed right-6 z-[45] w-[360px] max-w-[calc(100vw-2rem)] flex flex-col rounded-2xl overflow-hidden shadow-2xl"
             style={{
+              bottom: bottomInset,
               height: "min(520px, calc(100vh - 6rem))",
               background: "#0F1620",
               border: "1px solid rgba(255,255,255,0.08)",

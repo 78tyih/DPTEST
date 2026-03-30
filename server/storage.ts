@@ -1,4 +1,4 @@
-import { users, quizResults, userEvents, salesContacts, conversations, chatMessages, type User, type InsertUser, type SalesContact, type InsertSalesContact, type Conversation, type ChatMessage } from "@shared/schema";
+import { users, quizResults, userEvents, salesContacts, conversations, chatMessages, agents, type User, type InsertUser, type SalesContact, type InsertSalesContact, type Conversation, type ChatMessage, type Agent } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, or, gte, lte, ne, isNull } from "drizzle-orm";
 import crypto from "crypto";
@@ -286,6 +286,11 @@ export class DatabaseStorage implements IStorage {
     await db.update(conversations).set({ quizSummary: summary }).where(eq(conversations.id, conversationId));
   }
 
+  async getPublicStats(): Promise<{ totalUsers: number }> {
+    const result = await db.select({ count: sql<number>`count(*)` }).from(users);
+    return { totalUsers: Number(result[0]?.count ?? 0) };
+  }
+
   async getActiveConversations(): Promise<(Conversation & { lastMessage?: string; unreadCount?: number })[]> {
     const convs = await db
       .select()
@@ -307,6 +312,65 @@ export class DatabaseStorage implements IStorage {
       });
     }
     return results;
+  }
+
+  // ====== Agent 账号方法 ======
+
+  async getAgentByUsername(username: string): Promise<Agent | undefined> {
+    const [agent] = await db.select().from(agents).where(eq(agents.username, username));
+    return agent || undefined;
+  }
+
+  async createAgentIfNotExists(data: { name: string; username: string; password: string }): Promise<Agent> {
+    const existing = await this.getAgentByUsername(data.username);
+    if (existing) return existing;
+    const [agent] = await db.insert(agents).values(data).returning();
+    return agent;
+  }
+
+  // ====== 直播间邀约记录 ======
+
+  async markConversationInvite(conversationId: number, status: 'early' | 'late', agentName: string): Promise<void> {
+    await db.update(conversations).set({
+      inviteStatus: status,
+      invitedAt: new Date(),
+      invitedBy: agentName,
+    }).where(eq(conversations.id, conversationId));
+  }
+
+  // ====== 客服个人数据看板 ======
+
+  async getAgentStats(agentName: string): Promise<{
+    today: { invites: number; earlyInvites: number; lateInvites: number; takeovers: number; inviteRate: string };
+    week: { invites: number; earlyInvites: number; lateInvites: number; takeovers: number; inviteRate: string };
+  }> {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(todayStart);
+    weekStart.setDate(weekStart.getDate() - 6);
+
+    const calcStats = async (since: Date) => {
+      // 我邀约的对话
+      const invited = await db.select().from(conversations)
+        .where(and(eq(conversations.invitedBy, agentName), gte(conversations.invitedAt, since)));
+      const earlyInvites = invited.filter(c => c.inviteStatus === 'early').length;
+      const lateInvites = invited.filter(c => c.inviteStatus === 'late').length;
+
+      // 我接管过的对话
+      const takeovers = await db.select({ count: sql<number>`count(*)` })
+        .from(conversations)
+        .where(and(eq(conversations.assignedAgent, agentName), gte(conversations.lastMessageAt, since)));
+      const takeoverCount = Number(takeovers[0]?.count ?? 0);
+
+      // 邀约率 = 邀约数 / max(接管数, 1)
+      const inviteTotal = earlyInvites + lateInvites;
+      const rate = takeoverCount > 0 ? Math.round((inviteTotal / takeoverCount) * 100) : 0;
+
+      return { invites: inviteTotal, earlyInvites, lateInvites, takeovers: takeoverCount, inviteRate: `${rate}%` };
+    };
+
+    const [today, week] = await Promise.all([calcStats(todayStart), calcStats(weekStart)]);
+    return { today, week };
   }
 }
 

@@ -56,7 +56,7 @@ export default function LoginModal({ open, onClose, onSuccess, title, subtitle, 
         const res = await fetch('/api/reset-password', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone, newPassword }),
+          body: JSON.stringify({ phone, oldPassword: password, newPassword }),
           credentials: 'include',
         });
 
@@ -101,9 +101,11 @@ export default function LoginModal({ open, onClose, onSuccess, title, subtitle, 
       await queryClient.refetchQueries({ queryKey: ["/api/me"] });
 
       if (tab === 'register') {
-        sendRegisterWebhook({ phone });
+        sendRegisterWebhook({ phone }).catch(() => {});
       }
 
+      // 等一小段时间确保 session 和 auth 状态同步
+      await new Promise(r => setTimeout(r, 100));
       onSuccess();
     } catch {
       toast({ title: "网络错误，请重试", variant: "destructive" });
@@ -232,12 +234,11 @@ export default function LoginModal({ open, onClose, onSuccess, title, subtitle, 
                 )}
               </div>
 
-              {tab !== 'reset' && (
-                <div>
+              <div>
                   <div className="flex items-center gap-2 mb-1.5">
                     <Lock className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
                     <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {tab === 'register' ? '设置密码（至少6位）' : '密码'}
+                      {tab === 'register' ? '设置密码（至少6位）' : tab === 'reset' ? '原密码' : '密码'}
                     </span>
                   </div>
                   <div className="relative">
@@ -278,7 +279,6 @@ export default function LoginModal({ open, onClose, onSuccess, title, subtitle, 
                     </button>
                   )}
                 </div>
-              )}
 
               {tab === 'reset' && (
                 <div>
