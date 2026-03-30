@@ -73,6 +73,12 @@ interface UserTags {
   notes?: string;
   status?: string;
   labels?: string[];
+  profile?: {
+    primaryMarkets?: string[];
+    tradingCapitalRange?: string;
+    tradingExperience?: string;
+    tradingSystem?: string;
+  };
 }
 
 interface AdminUser {
@@ -682,6 +688,31 @@ function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; on
             </div>
           </div>
 
+          <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center gap-2 mb-3">
+              <Target className="w-4 h-4" style={{ color: 'var(--gold)' }} />
+              <span className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>前置画像</span>
+            </div>
+            <div className="grid grid-cols-1 gap-2 text-sm">
+              <div style={{ color: 'var(--text-muted)' }}>
+                交易品种：
+                <span style={{ color: 'var(--text-strong)' }}> {user.tags?.profile?.primaryMarkets?.join('、') || '-'}</span>
+              </div>
+              <div style={{ color: 'var(--text-muted)' }}>
+                资金体量：
+                <span style={{ color: 'var(--text-strong)' }}> {user.tags?.profile?.tradingCapitalRange || '-'}</span>
+              </div>
+              <div style={{ color: 'var(--text-muted)' }}>
+                交易时长：
+                <span style={{ color: 'var(--text-strong)' }}> {user.tags?.profile?.tradingExperience || '-'}</span>
+              </div>
+              <div style={{ color: 'var(--text-muted)' }}>
+                交易体系：
+                <span style={{ color: 'var(--text-strong)' }}> {user.tags?.profile?.tradingSystem || '-'}</span>
+              </div>
+            </div>
+          </div>
+
           {/* 跟进状态 + 备注 */}
           <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
             <div className="flex items-center gap-2 mb-3">
@@ -917,13 +948,17 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
       const min = entries.reduce((a, b) => a[1] <= b[1] ? a : b);
       return DIMENSION_NAMES[min[0]] || min[0];
     };
-    const header = "ID,手机号,昵称,微信号,来源,阶段,登录天数,交易者���型,综合评分,认知格局,执行力,风险管理,市场适应,交易心理,��统思维,薄弱维度,注册时间,测评时间,最��活跃";
+    const header = "ID,手机号,昵称,微信号,来源,交易品种,资金体量,交易时长,交易体系,阶段,登录天数,交易者类型,综合评分,认知格局,执行力,风险管理,市场适应,交易心理,系统思维,薄弱维度,注册时间,测评时间,最后活跃";
     const rows = filtered.map(u => [
       u.id,
       escapeCSV(u.phone),
       escapeCSV(u.nickname),
       escapeCSV(u.wechat_id),
       escapeCSV(u.source),
+      escapeCSV(u.tags?.profile?.primaryMarkets?.join(" / ")),
+      escapeCSV(u.tags?.profile?.tradingCapitalRange),
+      escapeCSV(u.tags?.profile?.tradingExperience),
+      escapeCSV(u.tags?.profile?.tradingSystem),
       escapeCSV(TIER_NAMES[u.tier] || `T${u.tier}`),
       u.login_days,
       escapeCSV(u.trader_type_code ? (TRADER_TYPE_NAMES[u.trader_type_code] || u.trader_type_code) : ""),
@@ -1074,6 +1109,9 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
                 <div className="flex items-center gap-3 text-xs flex-wrap" style={{ color: 'var(--text-muted)' }}>
                   <span data-testid={`text-login-days-${u.id}`}>登录 {u.login_days} 天</span>
                   {u.source && <span data-testid={`text-source-${u.id}`}>来源: {u.source}</span>}
+                  {u.tags?.profile?.primaryMarkets?.length ? <span>品种: {u.tags.profile.primaryMarkets.join(" / ")}</span> : null}
+                  {u.tags?.profile?.tradingCapitalRange ? <span>资金: {u.tags.profile.tradingCapitalRange}</span> : null}
+                  {u.tags?.profile?.tradingExperience ? <span>时长: {u.tags.profile.tradingExperience}</span> : null}
                   {u.quiz_completed_at && <span data-testid={`text-quiz-date-${u.id}`}>测评 {formatDate(u.quiz_completed_at)}</span>}
                   {u.last_active_at && <span data-testid={`text-active-${u.id}`}>活跃 {formatDate(u.last_active_at)}</span>}
                 </div>

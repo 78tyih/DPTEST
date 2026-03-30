@@ -15,6 +15,7 @@ import LiveRoomFloat from "@/components/LiveRoomFloat";
 import WeChatBrowserGuide from "@/components/WeChatBrowserGuide";
 import LandingPage from "@/pages/landing";
 import HomePage from "@/pages/home";
+import IntakePage from "@/pages/intake";
 import QuizPage from "@/pages/quiz";
 import LoadingPage from "@/pages/loading";
 import ResultPage from "@/pages/result";
@@ -182,6 +183,8 @@ function Router() {
               <HomePage />
             </AuthGuard>
           </Route>
+
+          <Route path="/intake" component={IntakePage} />
 
           <Route path="/quiz">
             <QuizPage onComplete={handleQuizComplete} />

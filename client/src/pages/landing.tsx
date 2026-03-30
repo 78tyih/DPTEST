@@ -100,7 +100,7 @@ export default function LandingPage() {
             </p>
           )}
           <motion.button
-            onClick={() => navigate("/quiz")}
+            onClick={() => navigate("/intake")}
             whileHover={{ scale: 1.02, y: -2 }}
             whileTap={{ scale: 0.98 }}
             className="w-full h-12 md:h-[52px] rounded-xl font-bold text-base text-white flex items-center justify-center gap-2 transition-all duration-200"

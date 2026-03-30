@@ -470,12 +470,33 @@ export async function registerRoutes(
         return res.status(401).json({ message: "未登录" });
       }
 
-      const { nickname, wechatId, source, tags } = req.body;
-      await storage.updateUserProfile(userId, {
+      const {
         nickname,
         wechatId,
         source,
         tags,
+        primaryMarkets,
+        tradingCapitalRange,
+        tradingExperience,
+        tradingSystem,
+      } = req.body;
+      const user = await storage.getUser(userId);
+      const existingTags = (user?.tags as Record<string, unknown> | null) || {};
+      const nextTags = tags !== undefined ? tags : {
+        ...existingTags,
+        profile: {
+          ...((existingTags.profile as Record<string, unknown> | undefined) || {}),
+          ...(primaryMarkets !== undefined ? { primaryMarkets } : {}),
+          ...(tradingCapitalRange !== undefined ? { tradingCapitalRange } : {}),
+          ...(tradingExperience !== undefined ? { tradingExperience } : {}),
+          ...(tradingSystem !== undefined ? { tradingSystem } : {}),
+        },
+      };
+      await storage.updateUserProfile(userId, {
+        nickname,
+        wechatId,
+        source,
+        tags: nextTags as any,
         lastActiveAt: new Date(),
       });
 

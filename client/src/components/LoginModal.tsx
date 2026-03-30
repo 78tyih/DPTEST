@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Smartphone, Lock, Eye, EyeOff, X, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { sendRegisterWebhook } from "@/utils/webhook";
+import { syncPendingIntakeProfile } from "@/utils/intake";
 import { queryClient } from "@/lib/queryClient";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -99,6 +100,7 @@ export default function LoginModal({ open, onClose, onSuccess, title, subtitle, 
 
       await queryClient.invalidateQueries({ queryKey: ["/api/me"] });
       await queryClient.refetchQueries({ queryKey: ["/api/me"] });
+      await syncPendingIntakeProfile().catch(() => {});
 
       if (tab === 'register') {
         sendRegisterWebhook({ phone }).catch(() => {});
