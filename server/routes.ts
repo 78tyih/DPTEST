@@ -525,8 +525,11 @@ export async function registerRoutes(
 
   app.post("/api/webhook/result", async (req, res) => {
     try {
-      const { phone, wechatName, scores, traderType, rank, avgScore, salesStrategy, verifyCode } = req.body;
-      if (!phone || !traderType) {
+      const { phone } = req.body;
+      const isLegacyPayload = !!req.body?.traderType;
+      const isOrderflowPayload = !!req.body?.selectedTrack;
+
+      if (!phone || (!isLegacyPayload && !isOrderflowPayload)) {
         return res.status(400).json({ message: "缺少必要字段" });
       }
 
@@ -541,7 +544,25 @@ export async function registerRoutes(
         }
       }
 
-      sendResultNotification({ phone, wechatName, scores, traderType, rank, avgScore, salesStrategy, reportUrl, verifyCode });
+      if (isLegacyPayload) {
+        const { wechatName, scores, traderType, rank, avgScore, salesStrategy, verifyCode } = req.body;
+        sendResultNotification({ phone, wechatName, scores, traderType, rank, avgScore, salesStrategy, reportUrl, verifyCode });
+      } else {
+        const { wechatName, selectedTrack, scoreBand, dimensionScores, segmentTags, unlockRewards, recommendedAction, recommendedPath, verifyCode } = req.body;
+        sendResultNotification({
+          phone,
+          wechatName,
+          selectedTrack,
+          scoreBand,
+          dimensionScores,
+          segmentTags,
+          unlockRewards,
+          recommendedAction,
+          recommendedPath,
+          reportUrl,
+          verifyCode,
+        });
+      }
       res.json({ success: true });
     } catch (err) {
       console.error("Result webhook error:", err);

@@ -94,6 +94,33 @@ interface ResultWebhookPayload {
   verifyCode?: string;
 }
 
+interface OrderflowResultWebhookPayload {
+  phone: string;
+  wechatName?: string;
+  selectedTrack: "starter" | "deep";
+  scoreBand: {
+    title: string;
+    track: "starter" | "deep";
+    summary: string;
+    min?: number;
+    max?: number;
+  };
+  dimensionScores: Record<string, number>;
+  segmentTags: Array<{
+    label: string;
+    priority: "P0" | "P1" | "P2" | "P3";
+    salesAction: string;
+  }>;
+  unlockRewards: Array<{
+    title: string;
+    description: string;
+  }>;
+  recommendedAction: string;
+  recommendedPath: string;
+  reportUrl?: string;
+  verifyCode?: string;
+}
+
 const dimNames: Record<string, string> = {
   RISK: '风险管理',
   MENTAL: '交易心理',
@@ -101,9 +128,19 @@ const dimNames: Record<string, string> = {
   ADAPT: '市场适应',
   EXEC: '执行力',
   EDGE: '认知格局',
+  awareness: '订单流认知',
+  'market-fit': '市场适配',
+  'risk-control': '风控成熟度',
+  execution: '执行训练度',
+  'tool-readiness': '工具准备度',
+  'commercial-intent': '服务意向',
 };
 
-export async function sendResultNotification(payload: ResultWebhookPayload): Promise<{ success: boolean }> {
+function isOrderflowResultPayload(payload: ResultWebhookPayload | OrderflowResultWebhookPayload): payload is OrderflowResultWebhookPayload {
+  return "selectedTrack" in payload;
+}
+
+async function sendLegacyResultNotification(payload: ResultWebhookPayload): Promise<{ success: boolean }> {
   const scoreEntries = Object.entries(payload.scores).sort((a, b) => b[1] - a[1]);
 
   const scoreLines = scoreEntries.map(([dim, score], i) => {
@@ -165,4 +202,76 @@ export async function sendResultNotification(payload: ResultWebhookPayload): Pro
     console.error("Failed to send result webhook:", err);
     return { success: true };
   }
+}
+
+async function sendOrderflowDiagnosticNotification(payload: OrderflowResultWebhookPayload): Promise<{ success: boolean }> {
+  const scoreEntries = Object.entries(payload.dimensionScores).sort((a, b) => b[1] - a[1]);
+  const scoreLines = scoreEntries.map(([dim, score], index) => {
+    const filled = Math.round(score / 10);
+    const bar = '█'.repeat(filled) + '░'.repeat(10 - filled);
+    const label = index === 0 ? ' 🔥最强' : (index === scoreEntries.length - 1 ? ' ⬆️补强位' : '');
+    return `${dimNames[dim] || dim}　${bar} **${score}**${label}`;
+  }).join('\n');
+
+  const segmentLines = payload.segmentTags.length > 0
+    ? payload.segmentTags.map((tag) => `- <font color="info">${tag.priority}</font> ${tag.label}：${tag.salesAction}`).join('\n')
+    : '- 暂无明确标签，先进入直播培育链路';
+
+  const rewardLines = payload.unlockRewards.map((reward) => `- ${reward.title}：${reward.description}`).join('\n');
+  const trackLabel = payload.selectedTrack === "starter" ? "浅度测评" : "深度测评";
+
+  const content = [
+    `## 🎯 订单流诊断报告 — 请按标签跟进`,
+    ``,
+    `### 👤 客户信息`,
+    `**微信昵称：** ${payload.wechatName || '未授权'}`,
+    `**手机号：** <font color="warning">${payload.phone}</font>`,
+    ...(payload.verifyCode ? [
+      `**身份验证码：** <font color="warning">${payload.verifyCode}</font>`,
+      `> 用户添加好友后会发送此验证码，请留意匹配`,
+    ] : []),
+    ``,
+    `### 🧭 诊断结果`,
+    `**测评轨道：** ${trackLabel}`,
+    `**结果分层：** <font color="info">${payload.scoreBand.title}</font>`,
+    `**推荐路径：** ${payload.recommendedPath}`,
+    `**建议动作：** ${payload.recommendedAction}`,
+    ``,
+    `### 🕸️ 六维得分`,
+    scoreLines,
+    ``,
+    `### 🏷️ 销售标签`,
+    segmentLines,
+    ``,
+    `### 🎁 已解锁资料`,
+    rewardLines,
+    ``,
+    `---`,
+    `💡 **备注：** ${payload.scoreBand.summary}`,
+    ...(payload.reportUrl ? [
+      ``,
+      `📎 **完整报告链接（发给客户）：** [点击查看完整报告](${payload.reportUrl})`,
+    ] : []),
+  ].join('\n');
+
+  try {
+    const res = await fetch(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ msgtype: "markdown", markdown: { content } }),
+    });
+    await res.json();
+    return { success: true };
+  } catch (err) {
+    console.error("Failed to send orderflow result webhook:", err);
+    return { success: true };
+  }
+}
+
+export async function sendResultNotification(payload: ResultWebhookPayload | OrderflowResultWebhookPayload): Promise<{ success: boolean }> {
+  if (isOrderflowResultPayload(payload)) {
+    return sendOrderflowDiagnosticNotification(payload);
+  }
+
+  return sendLegacyResultNotification(payload);
 }

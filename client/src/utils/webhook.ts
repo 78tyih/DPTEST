@@ -1,5 +1,7 @@
 import { salesStrategy } from "@/data/salesStrategy";
 import { rankTiers, traderTypes } from "@/data/traderTypes";
+import type { DiagnosticDimension, RewardAsset, ScoreBand, SegmentTagDefinition, DiagnosticTrackId } from "@/data/orderflowDiagnostic";
+import type { OrderflowDiagnosticResult } from "@/utils/orderflowDiagnostic";
 
 interface RegisterWebhookParams {
   phone: string;
@@ -19,6 +21,19 @@ interface ResultWebhookParams {
     avoid: string;
     keyHook: string;
   };
+  verifyCode?: string;
+}
+
+export interface OrderflowResultWebhookParams {
+  phone: string;
+  wechatName?: string;
+  selectedTrack: DiagnosticTrackId;
+  scoreBand: ScoreBand;
+  dimensionScores: Record<DiagnosticDimension, number>;
+  segmentTags: SegmentTagDefinition[];
+  unlockRewards: RewardAsset[];
+  recommendedAction: string;
+  recommendedPath: string;
   verifyCode?: string;
 }
 
@@ -76,6 +91,31 @@ export function buildResultWebhookPayload({
   };
 }
 
+export function buildOrderflowResultWebhookPayload({
+  phone,
+  wechatName,
+  result,
+  verifyCode,
+}: {
+  phone: string;
+  wechatName?: string;
+  result: OrderflowDiagnosticResult;
+  verifyCode?: string;
+}): OrderflowResultWebhookParams {
+  return {
+    phone,
+    wechatName,
+    selectedTrack: result.trackId,
+    scoreBand: result.scoreBand,
+    dimensionScores: result.normalizedScores,
+    segmentTags: result.segmentTags,
+    unlockRewards: result.unlockRewards,
+    recommendedAction: result.recommendedAction,
+    recommendedPath: result.recommendedPath,
+    verifyCode,
+  };
+}
+
 export async function sendRegisterWebhook({ phone, wechatName }: RegisterWebhookParams) {
   try {
     const res = await fetch('/api/webhook/register', {
@@ -100,6 +140,20 @@ export async function sendResultWebhook({ phone, wechatName, scores, traderType,
     return await res.json();
   } catch (err) {
     console.error('结果 webhook 失败:', err);
+    return { success: true, webhookError: true };
+  }
+}
+
+export async function sendOrderflowResultWebhook(payload: OrderflowResultWebhookParams) {
+  try {
+    const res = await fetch('/api/webhook/result', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (err) {
+    console.error('订单流结果 webhook 失败:', err);
     return { success: true, webhookError: true };
   }
 }
