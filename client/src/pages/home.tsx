@@ -15,6 +15,9 @@ import InteractiveCharacter from "@/components/character/InteractiveCharacter";
 import TierRoadmap from "@/components/character/TierRoadmap";
 import RankBadge from "@/components/RankBadge";
 import { usePageView, useTracking } from "@/hooks/use-tracking";
+import { reconstructOrderflowResultFromStoredRecord } from "@/utils/orderflowStorage";
+import { diagnosticDimensionLabels, diagnosticTracks } from "@/data/orderflowDiagnostic";
+import { setActiveOrderflowTrack } from "@/utils/orderflowSession";
 
 const ease = { duration: 0.22, ease: "easeOut" as const };
 
@@ -28,7 +31,7 @@ interface StoredQuizResult {
   traderTypeCode: string;
   avgScore: number;
   rankName: string;
-  scores: Record<string, number>;
+  scores: unknown;
   shareToken: string;
   createdAt: string;
 }
@@ -88,6 +91,8 @@ export default function HomePage() {
 
   const traderType = quizResult ? traderTypes[quizResult.traderTypeCode] : null;
   const rank = quizResult ? rankTiers.find(r => r.name === quizResult.rankName) : null;
+  const orderflowResult = quizResult ? reconstructOrderflowResultFromStoredRecord(quizResult) : null;
+  const legacyScores = quizResult && !orderflowResult ? (quizResult.scores as Record<string, number>) : null;
 
   const unlockTime = quizResult?.createdAt
     ? new Date(new Date(quizResult.createdAt).getTime() + UNLOCK_HOURS * 3600000)
@@ -97,19 +102,19 @@ export default function HomePage() {
   const [showShareModal, setShowShareModal] = useState(false);
 
   const shareResult = useMemo<QuizResult | null>(() => {
-    if (!quizResult || !traderType || !rank) return null;
+    if (!quizResult || !traderType || !rank || !legacyScores) return null;
     const dims: Dimension[] = ['RISK', 'MENTAL', 'SYSTEM', 'ADAPT', 'EXEC', 'EDGE'];
-    const sorted = [...dims].sort((a, b) => (quizResult.scores[b] ?? 0) - (quizResult.scores[a] ?? 0));
+    const sorted = [...dims].sort((a, b) => (legacyScores[b] ?? 0) - (legacyScores[a] ?? 0));
     return {
-      rawScores: quizResult.scores as Record<Dimension, number>,
-      normalizedScores: quizResult.scores as Record<Dimension, number>,
+      rawScores: legacyScores as Record<Dimension, number>,
+      normalizedScores: legacyScores as Record<Dimension, number>,
       traderType,
       rank,
       avgScore: quizResult.avgScore,
       rarity: rarityMap[quizResult.traderTypeCode] || '8%',
       top2: [sorted[0], sorted[1]] as [Dimension, Dimension],
     };
-  }, [quizResult, traderType, rank]);
+  }, [quizResult, traderType, rank, legacyScores]);
 
   const handleLogout = async () => {
     await apiRequest("POST", "/api/logout");
@@ -128,6 +133,7 @@ export default function HomePage() {
   const cc = traderType?.cardColors ?? (traderType ? { primary: traderType.colors[0], secondary: traderType.colors[1], dark: '#0d0f14', glow: `${traderType.colors[0]}40` } : null);
 
   const hasResult = !!(quizResult && traderType && rank && cc);
+  const hasOrderflowResult = !!(quizResult && orderflowResult);
 
   return (
     <div
@@ -181,6 +187,27 @@ export default function HomePage() {
           <div className="flex items-center justify-center py-24">
             <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
           </div>
+        ) : hasOrderflowResult && orderflowResult ? (
+          <OrderflowHomeSummary
+            quizResult={quizResult!}
+            result={orderflowResult}
+            reportUnlocked={reportUnlocked}
+            countdown={countdown}
+            onViewDetail={() => {
+              sessionStorage.setItem('quiz_result', JSON.stringify(orderflowResult));
+              navigate("/result");
+            }}
+            onRetake={() => navigate("/intake")}
+            onRetakeStarter={() => {
+              setActiveOrderflowTrack("starter");
+              navigate("/intake");
+            }}
+            onRetakeDeep={() => {
+              setActiveOrderflowTrack("deep");
+              navigate("/intake");
+            }}
+            onViewReport={() => navigate(`/report/${quizResult!.shareToken}`)}
+          />
         ) : hasResult ? (
           <>
             <motion.div
@@ -263,7 +290,7 @@ export default function HomePage() {
                   return <polygon key={i} points={pts} fill="none" stroke="#2a2a3a" strokeWidth="0.5"/>;
                 })}
                 {(() => {
-                  const vals = dimKeys.map(k => (quizResult.scores[k] ?? 50) / 100);
+                  const vals = dimKeys.map(k => (legacyScores?.[k] ?? 50) / 100);
                   const pts = vals.map((v, i) => {
                     const a = (Math.PI*2*i)/6 - Math.PI/2;
                     return `${100+Math.cos(a)*55*v},${100+Math.sin(a)*55*v}`;
@@ -280,7 +307,7 @@ export default function HomePage() {
                 })()}
                 {dimLabels.map((l, i) => {
                   const a = (Math.PI*2*i)/6 - Math.PI/2;
-                  const val = quizResult.scores[dimKeys[i]] ?? 50;
+                  const val = legacyScores?.[dimKeys[i]] ?? 50;
                   return <text key={i} x={100+Math.cos(a)*75} y={100+Math.sin(a)*75} textAnchor="middle" dominantBaseline="middle" fill="#8B95A5" fontSize="9">{l} {val}</text>;
                 })}
               </svg>
@@ -324,10 +351,11 @@ export default function HomePage() {
             >
               <motion.button
                 onClick={() => {
-                  const sorted = Object.entries(quizResult.scores).sort((a, b) => b[1] - a[1]);
+                  const scores = legacyScores || {};
+                  const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
                   sessionStorage.setItem('quiz_result', JSON.stringify({
-                    rawScores: quizResult.scores,
-                    normalizedScores: quizResult.scores,
+                    rawScores: scores,
+                    normalizedScores: scores,
                     traderType: traderType,
                     rank: rank,
                     avgScore: quizResult.avgScore,
@@ -419,21 +447,39 @@ export default function HomePage() {
               className="text-center py-16"
             >
               <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-strong)' }}>
-                你还没有完成交易能力测评
+                你还没有完成订单流交易诊断
               </h3>
               <p className="text-xs mb-6" style={{ color: 'var(--text-muted)' }}>
-                2分钟 · 12道实战情境题 · 发现你的交易DNA
+                先做浅测筛选，再决定是否进入深测拿完整报告
               </p>
-              <motion.button
-                onClick={() => navigate("/quiz")}
-                whileHover={{ scale: 1.02, y: -2 }}
-                whileTap={{ scale: 0.98 }}
-                className="w-full max-w-xs mx-auto h-11 rounded-xl font-bold text-sm text-white transition-all duration-200"
-                style={{ background: 'var(--primary)' }}
-                data-testid="button-start-quiz"
-              >
-                开始测评
-              </motion.button>
+              <div className="grid gap-3 max-w-xs mx-auto">
+                <motion.button
+                  onClick={() => {
+                    setActiveOrderflowTrack("starter");
+                    navigate("/intake");
+                  }}
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full h-11 rounded-xl font-bold text-sm text-white transition-all duration-200"
+                  style={{ background: 'var(--primary)' }}
+                  data-testid="button-start-starter-home"
+                >
+                  开始浅度测评
+                </motion.button>
+                <motion.button
+                  onClick={() => {
+                    setActiveOrderflowTrack("deep");
+                    navigate("/intake");
+                  }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full h-11 rounded-xl text-sm font-medium transition-all duration-200"
+                  style={{ border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}
+                  data-testid="button-start-deep-home"
+                >
+                  直接深度测评
+                </motion.button>
+              </div>
             </motion.div>
 
             <motion.div
@@ -498,6 +544,135 @@ function formatRelativeDate(dateStr: string): string {
   if (days < 7) return `${days}天前`;
   if (days < 30) return `${Math.floor(days / 7)}周前`;
   return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+function OrderflowHomeSummary({
+  quizResult,
+  result,
+  reportUnlocked,
+  countdown,
+  onViewDetail,
+  onRetake,
+  onRetakeStarter,
+  onRetakeDeep,
+  onViewReport,
+}: {
+  quizResult: StoredQuizResult;
+  result: NonNullable<ReturnType<typeof reconstructOrderflowResultFromStoredRecord>>;
+  reportUnlocked: boolean;
+  countdown: string;
+  onViewDetail: () => void;
+  onRetake: () => void;
+  onRetakeStarter: () => void;
+  onRetakeDeep: () => void;
+  onViewReport: () => void;
+}) {
+  const sortedDimensions = Object.entries(result.normalizedScores).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const track = diagnosticTracks[result.trackId];
+
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ ...ease, delay: 0.06 }}
+        className="rounded-2xl p-5"
+        style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+      >
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <p className="text-xs tracking-wider mb-2" style={{ color: 'var(--gold)' }}>
+              {track.title} · {track.duration}
+            </p>
+            <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--text-strong)' }}>
+              {result.scoreBand.title}
+            </h2>
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+              {result.scoreBand.summary}
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="text-3xl font-num font-bold" style={{ color: 'var(--gold)' }}>
+              {result.avgScore}
+            </div>
+            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>/100</div>
+          </div>
+        </div>
+
+        <div className="rounded-xl px-4 py-3 mb-4" style={{ background: 'rgba(var(--primary-rgb), 0.08)' }}>
+          <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>推荐路径</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{result.recommendedPath}</p>
+          <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--text-muted)' }}>{result.recommendedAction}</p>
+        </div>
+
+        <div className="grid gap-3 mb-4">
+          {sortedDimensions.map(([dimension, score]) => (
+            <div key={dimension}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {diagnosticDimensionLabels[dimension as keyof typeof diagnosticDimensionLabels]}
+                </span>
+                <span className="text-xs font-num font-bold" style={{ color: 'var(--text-strong)' }}>{score}</span>
+              </div>
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                <div className="h-full rounded-full" style={{ width: `${score}%`, background: 'var(--primary)' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <button
+            onClick={onViewDetail}
+            className="py-2 rounded-xl text-sm font-semibold text-white"
+            style={{ background: 'var(--primary)' }}
+          >
+            查看详情
+          </button>
+          <button
+            onClick={onRetake}
+            className="py-2 rounded-xl text-sm font-medium"
+            style={{ border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}
+          >
+            重新测评
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <button
+            onClick={onRetakeStarter}
+            className="py-2 rounded-xl text-xs font-medium"
+            style={{ border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}
+          >
+            重做浅测
+          </button>
+          <button
+            onClick={onRetakeDeep}
+            className="py-2 rounded-xl text-xs font-medium"
+            style={{ border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}
+          >
+            重做深测
+          </button>
+        </div>
+
+        {quizResult.shareToken ? (
+          reportUnlocked ? (
+            <button
+              onClick={onViewReport}
+              className="w-full py-2.5 rounded-xl text-sm font-bold text-white"
+              style={{ background: 'var(--success)' }}
+            >
+              查看完整报告
+            </button>
+          ) : (
+            <div className="text-center text-xs" style={{ color: 'var(--text-muted)' }}>
+              {countdown} 后可查看完整报告
+            </div>
+          )
+        ) : null}
+      </motion.div>
+    </>
+  );
 }
 
 function GrowthTimeline({ history, cc }: { history: StoredQuizResult[]; cc: { primary: string; secondary?: string; glow: string } }) {

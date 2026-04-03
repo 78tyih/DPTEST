@@ -13,15 +13,17 @@ import RankBadge from "@/components/RankBadge";
 import LoginModal from "@/components/LoginModal";
 // 企业微信跳转已停用
 import type { QuizResult } from "@/utils/calculateResult";
+import type { OrderflowDiagnosticResult } from "@/utils/orderflowDiagnostic";
 import { dimensionLabels, type Dimension } from "@/data/questions";
 import { usePageView, useTracking } from "@/hooks/use-tracking";
 // 企业微信相关 imports 已移除
 import { useAuth } from "@/lib/auth";
 import { queryClient } from "@/lib/queryClient";
 import { buildResultWebhookPayload, sendResultWebhook } from "@/utils/webhook";
+import OrderflowDiagnosticView from "@/components/OrderflowDiagnosticView";
 
 interface ResultPageProps {
-  result: QuizResult;
+  result: QuizResult | OrderflowDiagnosticResult;
 }
 
 const ease = { duration: 0.22, ease: "easeOut" as const };
@@ -529,6 +531,28 @@ function CharacterCardPanel({ result, onClose, tier }: { result: QuizResult; onC
 }
 
 export default function ResultPage({ result }: ResultPageProps) {
+  if ("trackId" in result) {
+    return (
+      <OrderflowDiagnosticView
+        result={result}
+        title="订单流交易诊断结果"
+        subtitle="这份结果用于判断你现在更适合先做课程、软件、直播培育，还是考试盘路径。"
+        primaryAction={{
+          label: "回到个人主页",
+          onClick: () => window.location.assign("/home"),
+        }}
+        secondaryAction={{
+          label: "重新开始诊断",
+          onClick: () => window.location.assign("/intake"),
+        }}
+      />
+    );
+  }
+
+  return <LegacyResultPage result={result} />;
+}
+
+function LegacyResultPage({ result }: { result: QuizResult }) {
   const { traderType, rank, normalizedScores, avgScore } = result;
   const { user } = useAuth();
   const [, navigate] = useLocation();

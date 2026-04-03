@@ -1,10 +1,11 @@
 import { useState, useCallback, useRef, useMemo } from "react";
-import { questions } from "@/data/questions";
-import { dimensionLabels } from "@/data/questions";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check } from "lucide-react";
 import CharacterSVG from "@/components/character/CharacterSVG";
 import { usePageView, useTracking } from "@/hooks/use-tracking";
+import { getQuestionSetByTrack } from "@/utils/orderflowDiagnostic";
+import { diagnosticTracks } from "@/data/orderflowDiagnostic";
+import { getActiveOrderflowTrack } from "@/utils/orderflowSession";
 
 interface QuizPageProps {
   onComplete: (answers: number[]) => void;
@@ -13,6 +14,9 @@ interface QuizPageProps {
 const ghostTypes = ['ER', 'RS', 'RM', 'ES', 'RE', 'SM', 'SE', 'ME', 'MA', 'EA', 'EM', 'AS', 'RA', 'EAv', 'REv', 'EX'];
 
 export default function QuizPage({ onComplete }: QuizPageProps) {
+  const trackId = getActiveOrderflowTrack();
+  const questions = getQuestionSetByTrack(trackId);
+  const track = diagnosticTracks[trackId];
   const [currentQ, setCurrentQ] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
   const [selecting, setSelecting] = useState<number | null>(null);
@@ -32,11 +36,8 @@ export default function QuizPage({ onComplete }: QuizPageProps) {
     if (selecting !== null) return;
     setSelecting(optionIndex);
 
-    const question = questions[currentQ];
-    const mainDim = question.dimension;
-
     if (xpTimerRef.current) clearTimeout(xpTimerRef.current);
-    setXpFlash(`+${dimensionLabels[mainDim]}`);
+    setXpFlash(`已记录`);
 
     xpTimerRef.current = setTimeout(() => {
       setXpFlash(null);
@@ -108,10 +109,13 @@ export default function QuizPage({ onComplete }: QuizPageProps) {
           >
             <div className="mb-2">
               <span className="font-tag text-[11px] tracking-wider" style={{ color: 'var(--gold)', opacity: 0.7 }}>
-                SCENARIO {currentQ + 1}/{total}
+                {track.title.toUpperCase()} {currentQ + 1}/{total}
               </span>
             </div>
             <div className="mb-6">
+              <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
+                {track.duration} · 登录后结果会同步到你的个人主页和完整报告
+              </p>
               <h2 className="text-[17px] font-semibold leading-relaxed" style={{ color: 'var(--text-strong)' }} data-testid="text-question">
                 {question.text}
               </h2>

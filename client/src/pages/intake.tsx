@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { saveIntakeProfile, syncPendingIntakeProfile, type IntakeProfile } from "@/utils/intake";
+import { diagnosticTracks } from "@/data/orderflowDiagnostic";
+import { getActiveOrderflowTrack } from "@/utils/orderflowSession";
 
 const MARKET_OPTIONS = ["国内股票", "国内期货", "加密市场", "港美股", "国际期货"];
 const CAPITAL_OPTIONS = ["1万以下", "1万到30万", "30万到100万", "100万以上"];
@@ -28,7 +30,9 @@ const ease = { duration: 0.22, ease: "easeOut" as const };
 
 export default function IntakePage() {
   const [, navigate] = useLocation();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+  const trackId = getActiveOrderflowTrack();
+  const track = diagnosticTracks[trackId];
   const [stepIndex, setStepIndex] = useState(0);
   const [profile, setProfile] = useState<IntakeProfile>({
     primaryMarkets: [],
@@ -43,6 +47,20 @@ export default function IntakePage() {
     if (step.key === "primaryMarkets") return profile.primaryMarkets.length > 0;
     return Boolean(profile[step.key]);
   }, [profile, step]);
+
+  useEffect(() => {
+    if (!isLoading && !user) {
+      navigate("/");
+    }
+  }, [isLoading, navigate, user]);
+
+  if (isLoading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg-0)" }}>
+        <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
+      </div>
+    );
+  }
 
   const updateSelection = async (option: string) => {
     if (step.key === "primaryMarkets") {
@@ -107,13 +125,13 @@ export default function IntakePage() {
           >
             <div className="space-y-2">
               <p className="text-xs tracking-wider" style={{ color: "var(--gold)" }}>
-                PROFILE {stepIndex + 1}/{steps.length}
+                {track.title} · PROFILE {stepIndex + 1}/{steps.length}
               </p>
               <h1 className="text-xl font-bold" style={{ color: "var(--text-strong)" }}>
                 {step.title}
               </h1>
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                这会帮助我们更准确理解你的交易背景
+                这会帮助我们在 {track.duration} 的诊断里更准确理解你的交易背景
               </p>
             </div>
 

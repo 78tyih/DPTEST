@@ -328,9 +328,10 @@ export async function registerRoutes(
       }
 
       const { answers, scores, traderTypeCode, avgScore, rankName } = req.body;
+      const isOrderflowSubmission = typeof traderTypeCode === "string" && traderTypeCode.startsWith("OF_");
 
-      if (!Array.isArray(answers) || answers.length !== 12) {
-        return res.status(400).json({ message: "answers 必须是12个选项的数组" });
+      if (!Array.isArray(answers) || answers.length < 1) {
+        return res.status(400).json({ message: "answers 必须是非空数组" });
       }
       if (!scores || typeof scores !== 'object') {
         return res.status(400).json({ message: "scores 必须是对象" });
@@ -343,6 +344,12 @@ export async function registerRoutes(
       }
       if (typeof rankName !== 'string' || rankName.length < 1) {
         return res.status(400).json({ message: "rankName 无效" });
+      }
+      if (isOrderflowSubmission) {
+        const scoreData = scores as Record<string, unknown>;
+        if (scoreData.mode !== "orderflow-diagnostic") {
+          return res.status(400).json({ message: "订单流诊断 scores.mode 无效" });
+        }
       }
 
       const existing = await storage.getLatestQuizResult(userId);
@@ -365,7 +372,9 @@ export async function registerRoutes(
         userId,
         sessionId: req.body.sessionId || "server",
         eventType: "quiz_complete",
-        eventData: { traderTypeCode, avgScore, rankName },
+        eventData: isOrderflowSubmission
+          ? { traderTypeCode, avgScore, rankName, mode: "orderflow-diagnostic", trackId: (scores as any)?.trackId || null }
+          : { traderTypeCode, avgScore, rankName },
       });
 
       res.json({ success: true, id: result.id, shareToken: result.shareToken });

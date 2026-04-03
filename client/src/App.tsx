@@ -20,13 +20,18 @@ import QuizPage from "@/pages/quiz";
 import LoadingPage from "@/pages/loading";
 import ResultPage from "@/pages/result";
 import ReportPage from "@/pages/report";
-import { calculateResult, type QuizResult } from "@/utils/calculateResult";
-import { buildResultWebhookPayload, sendResultWebhook } from "@/utils/webhook";
+import { type QuizResult } from "@/utils/calculateResult";
+import { calculateOrderflowDiagnosticResult, type OrderflowDiagnosticResult } from "@/utils/orderflowDiagnostic";
+import { buildOrderflowResultWebhookPayload, sendOrderflowResultWebhook } from "@/utils/webhook";
 import { traderTypes, rankTiers, rarityMap } from "@/data/traderTypes";
+import { buildOrderflowQuizSubmission, reconstructOrderflowResultFromStoredRecord } from "@/utils/orderflowStorage";
+import { getActiveOrderflowTrack } from "@/utils/orderflowSession";
 
 const ANSWERS_KEY = "quiz_answers";
 const RESULT_KEY = "quiz_result";
 const RESULT_WEBHOOK_SENT_KEY = "quiz_result_webhook_sent";
+
+type RuntimeQuizResult = QuizResult | OrderflowDiagnosticResult;
 
 const pageTransition = {
   initial: { opacity: 0, y: 12 },
@@ -35,7 +40,7 @@ const pageTransition = {
   transition: { duration: 0.22, ease: "easeOut" as const },
 };
 
-function loadResult(): QuizResult | null {
+function loadResult(): RuntimeQuizResult | null {
   try {
     const raw = localStorage.getItem(RESULT_KEY) || sessionStorage.getItem(RESULT_KEY);
     return raw ? JSON.parse(raw) : null;
@@ -60,9 +65,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function reconstructResultFromDb(dbResult: any): QuizResult | null {
+function reconstructResultFromDb(dbResult: any): RuntimeQuizResult | null {
   if (!dbResult) return null;
   try {
+    const orderflowResult = reconstructOrderflowResultFromStoredRecord(dbResult);
+    if (orderflowResult) {
+      return orderflowResult;
+    }
+
     const type = traderTypes[dbResult.traderTypeCode];
     if (!type) return null;
     const rank = rankTiers.find(r => r.name === dbResult.rankName) || rankTiers[rankTiers.length - 1];
@@ -82,7 +92,7 @@ function reconstructResultFromDb(dbResult: any): QuizResult | null {
   }
 }
 
-function ResultRoute({ quizResult }: { quizResult: QuizResult | null }) {
+function ResultRoute({ quizResult }: { quizResult: RuntimeQuizResult | null }) {
   const { user } = useAuth();
   const { data: dbResult, isLoading } = useQuery({
     queryKey: ["/api/quiz-result"],
@@ -109,7 +119,7 @@ function ResultRoute({ quizResult }: { quizResult: QuizResult | null }) {
 
 function Router() {
   const [location, navigate] = useLocation();
-  const [quizResult, setQuizResult] = useState<QuizResult | null>(loadResult);
+  const [quizResult, setQuizResult] = useState<RuntimeQuizResult | null>(loadResult);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -124,20 +134,16 @@ function Router() {
     sessionStorage.setItem(ANSWERS_KEY, JSON.stringify(answers));
     sessionStorage.removeItem("quiz_result_saved");
     sessionStorage.removeItem(RESULT_WEBHOOK_SENT_KEY);
-    const result = calculateResult(answers);
+    const trackId = getActiveOrderflowTrack();
+    const result = calculateOrderflowDiagnosticResult(trackId, answers);
     setQuizResult(result);
 
     try {
+      const submission = buildOrderflowQuizSubmission(answers, result);
       const res = await fetch("/api/quiz-result", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          answers,
-          scores: result.normalizedScores,
-          traderTypeCode: result.traderType.code,
-          avgScore: result.avgScore,
-          rankName: result.rank.name,
-        }),
+        body: JSON.stringify(submission),
         credentials: "include",
       });
       if (res.ok) {
@@ -146,14 +152,11 @@ function Router() {
         queryClient.invalidateQueries({ queryKey: ["/api/me"] });
 
         if (user?.phone && sessionStorage.getItem(RESULT_WEBHOOK_SENT_KEY) !== "true") {
-          const payload = buildResultWebhookPayload({
+          const payload = buildOrderflowResultWebhookPayload({
             phone: user.phone,
-            normalizedScores: result.normalizedScores,
-            traderTypeCode: result.traderType.code,
-            avgScore: result.avgScore,
-            rankName: result.rank.name,
+            result,
           });
-          sendResultWebhook(payload).catch(() => {});
+          sendOrderflowResultWebhook(payload).catch(() => {});
           sessionStorage.setItem(RESULT_WEBHOOK_SENT_KEY, "true");
         }
       }
@@ -184,18 +187,28 @@ function Router() {
             </AuthGuard>
           </Route>
 
-          <Route path="/intake" component={IntakePage} />
-
-          <Route path="/quiz">
-            <QuizPage onComplete={handleQuizComplete} />
+          <Route path="/intake">
+            <AuthGuard>
+              <IntakePage />
+            </AuthGuard>
           </Route>
 
           <Route path="/loading">
-            {quizResult ? <LoadingPage onDone={handleLoadingDone} /> : <Redirect to="/" />}
+            <AuthGuard>
+              {quizResult ? <LoadingPage onDone={handleLoadingDone} /> : <Redirect to="/" />}
+            </AuthGuard>
+          </Route>
+
+          <Route path="/quiz">
+            <AuthGuard>
+              <QuizPage onComplete={handleQuizComplete} />
+            </AuthGuard>
           </Route>
 
           <Route path="/result">
-            <ResultRoute quizResult={quizResult} />
+            <AuthGuard>
+              <ResultRoute quizResult={quizResult} />
+            </AuthGuard>
           </Route>
 
           <Route path="/report/:token" component={ReportPage} />

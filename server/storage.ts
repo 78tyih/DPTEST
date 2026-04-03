@@ -18,7 +18,7 @@ export interface IStorage {
   updateUserTier(userId: number, tier: number): Promise<void>;
   saveQuizResult(userId: number, data: {
     answers: number[];
-    scores: Record<string, number>;
+    scores: Record<string, unknown>;
     traderTypeCode: string;
     avgScore: number;
     rankName: string;
@@ -124,7 +124,7 @@ export class DatabaseStorage implements IStorage {
 
   async saveQuizResult(userId: number, data: {
     answers: number[];
-    scores: Record<string, number>;
+    scores: Record<string, unknown>;
     traderTypeCode: string;
     avgScore: number;
     rankName: string;

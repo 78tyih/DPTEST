@@ -14,6 +14,7 @@ import {
 } from "@/data/orderflowDiagnostic";
 
 export interface OrderflowDiagnosticResult {
+  kind: "orderflow";
   trackId: DiagnosticTrackId;
   questions: DiagnosticQuestion[];
   rawScores: Record<DiagnosticDimension, number>;
@@ -148,6 +149,7 @@ export function calculateOrderflowDiagnosticResult(
   const primaryTag = segmentTags[0] ?? segmentTagDefinitions["live-nurture"];
 
   return {
+    kind: "orderflow",
     trackId,
     questions,
     rawScores,

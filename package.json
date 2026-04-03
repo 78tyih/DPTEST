@@ -9,6 +9,7 @@
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "test:orderflow-diagnostic": "tsx script/test-orderflow-diagnostic.ts",
+    "test:orderflow-storage": "tsx script/test-orderflow-storage.ts",
     "db:push": "drizzle-kit push",
     "benchmark:stats": "tsx script/benchmark-stats.ts",
     "deploy:fly": "bash script/deploy-fly.sh"

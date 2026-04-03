@@ -11,6 +11,8 @@ import CharacterSVG from "@/components/character/CharacterSVG";
 import RankBadge from "@/components/RankBadge";
 // 企业微信跳转已停用
 import { usePageView, useTracking } from "@/hooks/use-tracking";
+import OrderflowDiagnosticView from "@/components/OrderflowDiagnosticView";
+import { reconstructOrderflowResultFromStoredRecord } from "@/utils/orderflowStorage";
 
 const ease = { duration: 0.22, ease: "easeOut" as const };
 
@@ -29,7 +31,7 @@ const dimAdvice: Record<Dimension, { text: string; resource: string; icon: strin
 };
 
 interface ReportData {
-  scores: Record<string, number>;
+  scores: unknown;
   traderTypeCode: string;
   avgScore: number;
   rankName: string;
@@ -86,6 +88,18 @@ export default function ReportPage() {
 
   const traderType = traderTypes[data.traderTypeCode];
   const rank = rankTiers.find(r => r.name === data.rankName) || rankTiers[rankTiers.length - 1];
+  const orderflowResult = reconstructOrderflowResultFromStoredRecord(data);
+
+  if (orderflowResult) {
+    return (
+      <OrderflowDiagnosticView
+        result={orderflowResult}
+        title="订单流诊断完整报告"
+        subtitle="这份报告更适合用于销售跟进和后续路径承接，你也可以把它当成后续学习的优先级地图。"
+      />
+    );
+  }
+
   const scores = data.scores as Record<Dimension, number>;
 
   return <ReportContent traderType={traderType} rank={rank} scores={scores} avgScore={data.avgScore} tier={data.tier ?? 0} />;
