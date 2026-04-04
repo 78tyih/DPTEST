@@ -117,6 +117,16 @@ interface OrderflowResultWebhookPayload {
   }>;
   recommendedAction: string;
   recommendedPath: string;
+  systemMapping: {
+    route: {
+      label: string;
+      description: string;
+      fitFor: string;
+      salesFocus: string;
+      nextStep: string;
+    };
+    reason: string;
+  };
   userSummary: string;
   salesSummary: {
     priorityLabel: string;
@@ -245,6 +255,11 @@ async function sendOrderflowDiagnosticNotification(payload: OrderflowResultWebho
     `**跟进优先级：** <font color="warning">${payload.salesSummary.priorityLabel}</font>`,
     `**推荐路径：** ${payload.recommendedPath}`,
     `**建议动作：** ${payload.recommendedAction}`,
+    ``,
+    `### 🧩 交易系统映射`,
+    `**映射系统：** ${payload.systemMapping.route.label}`,
+    `**适配说明：** ${payload.systemMapping.route.fitFor}`,
+    `**映射原因：** ${payload.systemMapping.reason}`,
     ``,
     `### 🧠 当前判断`,
     `${payload.userSummary}`,

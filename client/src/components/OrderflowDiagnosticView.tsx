@@ -149,6 +149,24 @@ export default function OrderflowDiagnosticView({
             </div>
           </div>
 
+          <div
+            className="rounded-xl px-4 py-3 mb-4"
+            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+          >
+            <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+              交易系统映射
+            </p>
+            <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-strong)" }}>
+              {result.systemMapping.route.label}
+            </p>
+            <p className="text-xs leading-relaxed mb-1" style={{ color: "var(--text-muted)" }}>
+              {result.systemMapping.route.fitFor}
+            </p>
+            <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+              {result.systemMapping.reason}
+            </p>
+          </div>
+
           <h2 className="text-lg font-bold mb-4" style={{ color: "var(--text-strong)" }}>
             六维诊断
           </h2>

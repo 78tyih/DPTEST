@@ -13,6 +13,7 @@ import {
   scoreBands,
   segmentTagDefinitions,
 } from "@/data/orderflowDiagnostic";
+import { resolveOrderflowSystemMapping, type OrderflowSystemMapping } from "@/data/orderflowLogicMap";
 
 export interface OrderflowDiagnosticResult {
   kind: "orderflow";
@@ -29,6 +30,7 @@ export interface OrderflowDiagnosticResult {
   unlockRewards: RewardAsset[];
   recommendedPath: string;
   recommendedAction: string;
+  systemMapping: OrderflowSystemMapping;
   userSummary: string;
   salesSummary: {
     priorityLabel: string;
@@ -168,6 +170,11 @@ export function calculateOrderflowDiagnosticResult(
   });
 
   const primaryTag = segmentTags[0] ?? segmentTagDefinitions["live-nurture"];
+  const systemMapping = resolveOrderflowSystemMapping({
+    trackId,
+    scoreBandId: scoreBand.id as Parameters<typeof resolveOrderflowSystemMapping>[0]["scoreBandId"],
+    segmentTagIds: segmentTags.map((tag) => tag.id),
+  });
   const topLabels = topDimensions.map((dimension) => diagnosticDimensionLabels[dimension]);
   const bottomLabels = bottomDimensions.map((dimension) => diagnosticDimensionLabels[dimension]);
 
@@ -246,14 +253,15 @@ export function calculateOrderflowDiagnosticResult(
     `你当前对订单流的状态更接近「${scoreBand.title}」。`,
     `优势更偏向 ${topLabels.join("、")}，但接下来最需要补强的是 ${bottomLabels.join("、")}。`,
     `${dimensionImprovementHints[bottomDimensions[0]]}。`,
+    `更适合先进入「${systemMapping.route.label}」。`,
   ].join("");
 
   const salesSummary = {
     priorityLabel,
-    fitConclusion: `${trackId === "starter" ? "浅测" : "深测"}结果显示：客户当前最强信号是 ${topLabels.join("、")}，主要补强位是 ${bottomLabels.join("、")}。`,
+    fitConclusion: `${trackId === "starter" ? "浅测" : "深测"}结果显示：客户当前最强信号是 ${topLabels.join("、")}，主要补强位是 ${bottomLabels.join("、")}，适合先走「${systemMapping.route.label}」。`,
     conversationHook,
     riskAlert,
-    nextStep,
+    nextStep: systemMapping.route.nextStep,
   };
 
   return {
@@ -269,8 +277,9 @@ export function calculateOrderflowDiagnosticResult(
     segmentTags,
     segmentSignalScores,
     unlockRewards,
-    recommendedPath: primaryTag.label,
-    recommendedAction: primaryTag.salesAction,
+    recommendedPath: systemMapping.route.label,
+    recommendedAction: systemMapping.route.nextStep,
+    systemMapping,
     userSummary,
     salesSummary,
   };

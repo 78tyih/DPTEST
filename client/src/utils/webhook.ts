@@ -1,4 +1,5 @@
 import { salesStrategy } from "@/data/salesStrategy";
+import type { OrderflowSystemMapping } from "@/data/orderflowLogicMap";
 import { rankTiers, traderTypes } from "@/data/traderTypes";
 import type { DiagnosticDimension, RewardAsset, ScoreBand, SegmentTagDefinition, DiagnosticTrackId } from "@/data/orderflowDiagnostic";
 import type { OrderflowDiagnosticResult } from "@/utils/orderflowDiagnostic";
@@ -34,6 +35,7 @@ export interface OrderflowResultWebhookParams {
   unlockRewards: RewardAsset[];
   recommendedAction: string;
   recommendedPath: string;
+  systemMapping: OrderflowSystemMapping;
   userSummary: string;
   salesSummary: OrderflowDiagnosticResult["salesSummary"];
   verifyCode?: string;
@@ -114,6 +116,7 @@ export function buildOrderflowResultWebhookPayload({
     unlockRewards: result.unlockRewards,
     recommendedAction: result.recommendedAction,
     recommendedPath: result.recommendedPath,
+    systemMapping: result.systemMapping,
     userSummary: result.userSummary,
     salesSummary: result.salesSummary,
     verifyCode,

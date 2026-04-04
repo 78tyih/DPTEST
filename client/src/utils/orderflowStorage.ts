@@ -5,6 +5,7 @@ import type {
   ScoreBand,
   SegmentTagDefinition,
 } from "@/data/orderflowDiagnostic";
+import type { OrderflowSystemMapping } from "@/data/orderflowLogicMap";
 import { getQuestionSetByTrack, type OrderflowDiagnosticResult } from "@/utils/orderflowDiagnostic";
 
 export interface StoredOrderflowScores {
@@ -18,6 +19,7 @@ export interface StoredOrderflowScores {
   recommendedPath: string;
   topDimensions: DiagnosticDimension[];
   bottomDimensions: DiagnosticDimension[];
+  systemMapping: OrderflowSystemMapping;
   userSummary: string;
   salesSummary: OrderflowDiagnosticResult["salesSummary"];
 }
@@ -51,6 +53,7 @@ export function buildOrderflowQuizSubmission(
       recommendedPath: result.recommendedPath,
       topDimensions: result.topDimensions,
       bottomDimensions: result.bottomDimensions,
+      systemMapping: result.systemMapping,
       userSummary: result.userSummary,
       salesSummary: result.salesSummary,
     },
@@ -102,6 +105,17 @@ export function reconstructOrderflowResultFromStoredRecord(
     unlockRewards: stored.unlockRewards ?? [],
     recommendedAction: stored.recommendedAction,
     recommendedPath: stored.recommendedPath,
+    systemMapping: stored.systemMapping ?? {
+      route: {
+        id: "live-nurture",
+        label: stored.recommendedPath,
+        description: stored.scoreBand.summary,
+        fitFor: stored.scoreBand.summary,
+        salesFocus: stored.recommendedAction,
+        nextStep: stored.recommendedAction,
+      },
+      reason: "历史记录缺少系统映射，按旧结果字段回填。",
+    },
     userSummary: stored.userSummary ?? stored.scoreBand.summary,
     salesSummary: stored.salesSummary ?? {
       priorityLabel: "持续培育",
