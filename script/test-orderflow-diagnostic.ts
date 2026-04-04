@@ -16,6 +16,7 @@ assert.equal(starterResult.userSummary.includes("订单流"), true);
 assert.equal(starterResult.salesSummary.priorityLabel.length > 0, true);
 assert.equal(starterResult.salesSummary.conversationHook.length > 0, true);
 assert.equal(starterResult.systemMapping.route.label.length > 0, true);
+assert.equal(starterResult.salesPlaybook.responseWindow.length > 0, true);
 
 const deepAnswers = new Array(getQuestionSetByTrack("deep").length).fill(0);
 const deepResult = calculateOrderflowDiagnosticResult("deep", deepAnswers);
@@ -29,6 +30,7 @@ assert.equal(deepResult.bottomDimensions.length, 2);
 assert.equal(deepResult.salesSummary.fitConclusion.length > 0, true);
 assert.equal(deepResult.salesSummary.nextStep.length > 0, true);
 assert.equal(deepResult.systemMapping.route.id.length > 0, true);
+assert.equal(deepResult.salesPlaybook.crmTag.length > 0, true);
 
 const payload = buildOrderflowResultWebhookPayload({
   phone: "13800000000",
@@ -47,5 +49,6 @@ assert.equal(payload.userSummary, deepResult.userSummary);
 assert.equal(payload.salesSummary.priorityLabel, deepResult.salesSummary.priorityLabel);
 assert.equal(payload.salesSummary.riskAlert.length > 0, true);
 assert.equal(payload.systemMapping.route.label, deepResult.systemMapping.route.label);
+assert.equal(payload.salesPlaybook.firstTouch, deepResult.salesPlaybook.firstTouch);
 
 console.log("test-orderflow-diagnostic: ok");

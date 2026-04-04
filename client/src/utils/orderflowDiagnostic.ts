@@ -14,6 +14,7 @@ import {
   segmentTagDefinitions,
 } from "@/data/orderflowDiagnostic";
 import { resolveOrderflowSystemMapping, type OrderflowSystemMapping } from "@/data/orderflowLogicMap";
+import { buildOrderflowSalesPlaybook, type OrderflowSalesPlaybook } from "@/data/orderflowSalesPlaybook";
 
 export interface OrderflowDiagnosticResult {
   kind: "orderflow";
@@ -31,6 +32,7 @@ export interface OrderflowDiagnosticResult {
   recommendedPath: string;
   recommendedAction: string;
   systemMapping: OrderflowSystemMapping;
+  salesPlaybook: OrderflowSalesPlaybook;
   userSummary: string;
   salesSummary: {
     priorityLabel: string;
@@ -263,6 +265,13 @@ export function calculateOrderflowDiagnosticResult(
     riskAlert,
     nextStep: systemMapping.route.nextStep,
   };
+  const salesPlaybook = buildOrderflowSalesPlaybook({
+    trackId,
+    systemRouteId: systemMapping.route.id,
+    priorityLabel,
+    segmentTagIds: segmentTags.map((tag) => tag.id),
+    unlockRewardTitles: unlockRewards.map((reward) => reward.title),
+  });
 
   return {
     kind: "orderflow",
@@ -280,6 +289,7 @@ export function calculateOrderflowDiagnosticResult(
     recommendedPath: systemMapping.route.label,
     recommendedAction: systemMapping.route.nextStep,
     systemMapping,
+    salesPlaybook,
     userSummary,
     salesSummary,
   };

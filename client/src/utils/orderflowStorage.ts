@@ -6,6 +6,7 @@ import type {
   SegmentTagDefinition,
 } from "@/data/orderflowDiagnostic";
 import type { OrderflowSystemMapping } from "@/data/orderflowLogicMap";
+import type { OrderflowSalesPlaybook } from "@/data/orderflowSalesPlaybook";
 import { getQuestionSetByTrack, type OrderflowDiagnosticResult } from "@/utils/orderflowDiagnostic";
 
 export interface StoredOrderflowScores {
@@ -20,6 +21,7 @@ export interface StoredOrderflowScores {
   topDimensions: DiagnosticDimension[];
   bottomDimensions: DiagnosticDimension[];
   systemMapping: OrderflowSystemMapping;
+  salesPlaybook: OrderflowSalesPlaybook;
   userSummary: string;
   salesSummary: OrderflowDiagnosticResult["salesSummary"];
 }
@@ -54,6 +56,7 @@ export function buildOrderflowQuizSubmission(
       topDimensions: result.topDimensions,
       bottomDimensions: result.bottomDimensions,
       systemMapping: result.systemMapping,
+      salesPlaybook: result.salesPlaybook,
       userSummary: result.userSummary,
       salesSummary: result.salesSummary,
     },
@@ -115,6 +118,14 @@ export function reconstructOrderflowResultFromStoredRecord(
         nextStep: stored.recommendedAction,
       },
       reason: "历史记录缺少系统映射，按旧结果字段回填。",
+    },
+    salesPlaybook: stored.salesPlaybook ?? {
+      responseWindow: "24 小时内跟进即可",
+      contactGoal: "历史记录缺少剧本，先按当前结果做基础跟进。",
+      firstTouch: stored.recommendedAction,
+      materialsToSend: stored.unlockRewards?.map((reward) => reward.title) ?? [],
+      avoid: "历史记录缺少剧本，请人工判断。",
+      crmTag: "历史记录 / 待补标签",
     },
     userSummary: stored.userSummary ?? stored.scoreBand.summary,
     salesSummary: stored.salesSummary ?? {

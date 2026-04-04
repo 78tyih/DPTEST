@@ -129,6 +129,14 @@ interface OrderflowResultWebhookPayload {
     };
     reason: string;
   };
+  salesPlaybook: {
+    responseWindow: string;
+    contactGoal: string;
+    firstTouch: string;
+    materialsToSend: string[];
+    avoid: string;
+    crmTag: string;
+  };
   userSummary: string;
   salesSummary: {
     priorityLabel: string;
@@ -238,6 +246,7 @@ async function sendOrderflowDiagnosticNotification(payload: OrderflowResultWebho
     : '- 暂无明确标签，先进入直播培育链路';
 
   const rewardLines = payload.unlockRewards.map((reward) => `- ${reward.title}：${reward.description}`).join('\n');
+  const materialLines = payload.salesPlaybook.materialsToSend.map((item) => `- ${item}`).join('\n');
   const trackLabel = payload.selectedTrack === "starter" ? "浅度测评" : "深度测评";
 
   const content = [
@@ -280,6 +289,15 @@ async function sendOrderflowDiagnosticNotification(payload: OrderflowResultWebho
     `**风险提醒：** ${payload.salesSummary.riskAlert}`,
     ``,
     `**建议下一步：** ${payload.salesSummary.nextStep}`,
+    ``,
+    `### 🧾 私域跟进剧本`,
+    `**响应时效：** ${payload.salesPlaybook.responseWindow}`,
+    `**跟进目标：** ${payload.salesPlaybook.contactGoal}`,
+    `**首条私聊切入：** ${payload.salesPlaybook.firstTouch}`,
+    `**建议先发：**`,
+    materialLines,
+    `**禁忌话术：** ${payload.salesPlaybook.avoid}`,
+    `**CRM 标签：** <font color="comment">${payload.salesPlaybook.crmTag}</font>`,
     ``,
     `### 🎁 已解锁资料`,
     rewardLines,
