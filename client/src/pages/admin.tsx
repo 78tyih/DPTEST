@@ -3,7 +3,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Lock, Plus, Trash2, Activity, Power, PowerOff, RefreshCw, Shield, ArrowLeft, X, BarChart3, Eye, UserPlus, MessageSquare, Users, TrendingUp, Pencil, Check, Clock, Copy, Search, Download, Phone, User, ChevronRight, Target, Lightbulb, AlertTriangle, Zap } from "lucide-react";
 import { traderTypes, rankTiers } from "@/data/traderTypes";
 import { dimensionLabels, type Dimension } from "@/data/questions";
+import { diagnosticDimensionLabels, type DiagnosticDimension } from "@/data/orderflowDiagnostic";
 import { useToast } from "@/hooks/use-toast";
+import { deriveAdminOrderflowSummary } from "@/utils/orderflowAdmin";
 
 interface SalesContact {
   id: number;
@@ -97,7 +99,7 @@ interface AdminUser {
   trader_type_code: string | null;
   avg_score: number | null;
   rank_name: string | null;
-  scores: Record<string, number> | null;
+  scores: unknown;
   quiz_completed_at: string | null;
 }
 
@@ -420,6 +422,7 @@ function StatsPanel({ stats, loading }: { stats: StatsData | null; loading: bool
 const TIER_NAMES: Record<number, string> = { 0: "学徒", 1: "交易者", 2: "精英", 3: "职业操盘手" };
 
 const DIMENSION_KEYS: Dimension[] = ['EDGE', 'EXEC', 'RISK', 'ADAPT', 'MENTAL', 'SYSTEM'];
+const ORDERFLOW_DIMENSION_KEYS: DiagnosticDimension[] = ['awareness', 'market-fit', 'risk-control', 'execution', 'tool-readiness', 'commercial-intent'];
 
 // 每种交易者类型对应的销售切入策略
 const SALES_STRATEGIES: Record<string, { opener: string; painPoint: string; courseValue: string; reminder: string }> = {
@@ -561,7 +564,9 @@ function ScoreBar({ label, score, color }: { label: string; score: number; color
 
 function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; onClose: () => void; onTagsUpdate?: (userId: number, tags: UserTags) => void }) {
   const { toast } = useToast();
-  const scores = user.scores;
+  const diagnosticSummary = deriveAdminOrderflowSummary(user.scores);
+  const scores = diagnosticSummary.mode === "legacy" ? diagnosticSummary.dimensionScores : null;
+  const orderflowScores = diagnosticSummary.mode === "orderflow" ? diagnosticSummary.dimensionScores : null;
   const typeCode = user.trader_type_code;
   const typeInfo = typeCode ? traderTypes[typeCode] : null;
   const strategy = typeCode ? SALES_STRATEGIES[typeCode] : null;
@@ -604,13 +609,18 @@ function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; on
     const lines: string[] = [];
     lines.push(`【${user.phone}】`);
     if (typeInfo) lines.push(`${typeInfo.icon} ${typeInfo.name}（${typeInfo.subtitle}）`);
+    if (diagnosticSummary.mode === "orderflow") {
+      if (diagnosticSummary.traderStageLabel) lines.push(`交易阶段：${diagnosticSummary.traderStageLabel}`);
+      if (diagnosticSummary.paymentIntentLabel) lines.push(`付费意向：${diagnosticSummary.paymentIntentLabel}`);
+      if (diagnosticSummary.recommendedPath) lines.push(`推荐路径：${diagnosticSummary.recommendedPath}`);
+    }
     if (user.avg_score != null && rank) lines.push(`${rank.icon} ${rank.name} ${user.avg_score}分`);
     if (strongest && weakest) lines.push(`强项：${strongest.label}${strongest.score} / 弱项：${weakest.label}${weakest.score}`);
     if (typeInfo) lines.push(`痛点：${typeInfo.piercingDescription.substring(0, 50)}...`);
     if (strategy) lines.push(`切入：${strategy.opener.substring(0, 40)}...`);
     if (notes) lines.push(`备注：${notes}`);
     return lines.join('\n');
-  }, [user, typeInfo, rank, strongest, weakest, strategy, notes]);
+  }, [user, typeInfo, diagnosticSummary, rank, strongest, weakest, strategy, notes]);
 
   const copyBrief = useCallback(async () => {
     const text = generateWechatNote();
@@ -718,6 +728,42 @@ function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; on
             </div>
           </div>
 
+          {diagnosticSummary.mode === "orderflow" && (
+            <div className="rounded-xl p-4" style={{ background: 'rgba(var(--primary-rgb), 0.08)', border: '1px solid rgba(var(--primary-rgb), 0.16)' }}>
+              <div className="flex items-center gap-2 mb-3">
+                <Zap className="w-4 h-4" style={{ color: 'var(--primary)' }} />
+                <span className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>订单流诊断标签</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm mb-3">
+                <div>
+                  <p style={{ color: 'var(--text-muted)' }}>交易阶段</p>
+                  <p style={{ color: 'var(--text-strong)' }}>{diagnosticSummary.traderStageLabel || '-'}</p>
+                </div>
+                <div>
+                  <p style={{ color: 'var(--text-muted)' }}>付费意向</p>
+                  <p style={{ color: 'var(--text-strong)' }}>{diagnosticSummary.paymentIntentLabel || '-'}</p>
+                </div>
+              </div>
+              <div className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
+                推荐路径：
+                <span style={{ color: 'var(--text-strong)' }}> {diagnosticSummary.recommendedPath || '-'}</span>
+              </div>
+              {diagnosticSummary.segmentTagLabels.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {diagnosticSummary.segmentTagLabels.map((label) => (
+                    <span
+                      key={label}
+                      className="text-xs px-2 py-1 rounded-full"
+                      style={{ background: 'rgba(var(--gold-rgb), 0.12)', color: 'var(--gold)' }}
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 跟进状态 + 备注 */}
           <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
             <div className="flex items-center gap-2 mb-3">
@@ -776,7 +822,7 @@ function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; on
           )}
 
           {/* 六维评分 */}
-          {scores && (
+          {(scores || orderflowScores) && (
             <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
               <div className="flex items-center gap-2 mb-3">
                 <BarChart3 className="w-4 h-4" style={{ color: 'var(--gold)' }} />
@@ -788,8 +834,16 @@ function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; on
                 )}
               </div>
               <div className="space-y-2.5">
-                {DIMENSION_KEYS.map(k => (
+                {scores && DIMENSION_KEYS.map(k => (
                   <ScoreBar key={k} label={dimensionLabels[k]} score={scores[k] ?? 0} color={getScoreColor(scores[k] ?? 0)} />
+                ))}
+                {orderflowScores && ORDERFLOW_DIMENSION_KEYS.map((key) => (
+                  <ScoreBar
+                    key={key}
+                    label={diagnosticDimensionLabels[key]}
+                    score={orderflowScores[key] ?? 0}
+                    color={getScoreColor(orderflowScores[key] ?? 0)}
+                  />
                 ))}
               </div>
             </div>
@@ -899,18 +953,36 @@ function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; on
 function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading: boolean; onRefresh: () => void }) {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
+  const [stageFilter, setStageFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState("all");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
 
-  const filtered = users.filter(u => {
+  const enrichedUsers = users.map((user) => ({
+    user,
+    diagnosticSummary: deriveAdminOrderflowSummary(user.scores),
+  }));
+  const stageOptions = Array.from(new Set(enrichedUsers.map(({ diagnosticSummary }) => diagnosticSummary.traderStageLabel).filter(Boolean)));
+  const paymentOptions = Array.from(new Set(enrichedUsers.map(({ diagnosticSummary }) => diagnosticSummary.paymentIntentLabel).filter(Boolean)));
+
+  const filtered = enrichedUsers.filter(({ user: u, diagnosticSummary }) => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return (
+    const matchesSearch = (
       u.phone.includes(q) ||
       (u.nickname && u.nickname.toLowerCase().includes(q)) ||
       (u.wechat_id && u.wechat_id.toLowerCase().includes(q)) ||
-      (u.trader_type_code && (TRADER_TYPE_NAMES[u.trader_type_code] || u.trader_type_code).toLowerCase().includes(q))
+      (u.trader_type_code && (TRADER_TYPE_NAMES[u.trader_type_code] || u.trader_type_code).toLowerCase().includes(q)) ||
+      diagnosticSummary.traderStageLabel.toLowerCase().includes(q) ||
+      diagnosticSummary.paymentIntentLabel.toLowerCase().includes(q) ||
+      diagnosticSummary.recommendedPath.toLowerCase().includes(q) ||
+      diagnosticSummary.segmentTagLabels.some((label) => label.toLowerCase().includes(q))
     );
+    return matchesSearch;
+  }).filter(({ diagnosticSummary }) => {
+    const matchesStage = stageFilter === "all" || diagnosticSummary.traderStageLabel === stageFilter;
+    const matchesPayment = paymentFilter === "all" || diagnosticSummary.paymentIntentLabel === paymentFilter;
+    return matchesStage && matchesPayment;
   });
 
   const copyText = useCallback(async (text: string, label: string) => {
@@ -947,14 +1019,19 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
       ADAPT: "市场适应", MENTAL: "交易心理", SYSTEM: "系统思维",
     };
     const DIMENSIONS = ["EDGE", "EXEC", "RISK", "ADAPT", "MENTAL", "SYSTEM"];
-    const getWeakest = (scores: Record<string, number> | null) => {
-      if (!scores) return "";
-      const entries = DIMENSIONS.map(d => [d, scores[d] ?? 999] as const);
+    const getWeakest = (summary: ReturnType<typeof deriveAdminOrderflowSummary>) => {
+      if (!summary.dimensionScores) return "";
+      if (summary.mode === "orderflow") {
+        const entries = ORDERFLOW_DIMENSION_KEYS.map((key) => [key, summary.dimensionScores?.[key] ?? 999] as const);
+        const min = entries.reduce((a, b) => a[1] <= b[1] ? a : b);
+        return diagnosticDimensionLabels[min[0]];
+      }
+      const entries = DIMENSIONS.map(d => [d, summary.dimensionScores?.[d] ?? 999] as const);
       const min = entries.reduce((a, b) => a[1] <= b[1] ? a : b);
       return DIMENSION_NAMES[min[0]] || min[0];
     };
-    const header = "ID,手机号,昵称,微信号,来源,交易品种,具体标的,资金体量,交易时长,交易体系,阶段,登录天数,交易者类型,综合评分,认知格局,执行力,风险管理,市场适应,交易心理,系统思维,薄弱维度,注册时间,测评时间,最后活跃";
-    const rows = filtered.map(u => [
+    const header = "ID,手机号,昵称,微信号,来源,交易品种,具体标的,资金体量,交易时长,交易体系,阶段,登录天数,交易者类型,综合评分,交易阶段,付费意向,推荐路径,认知格局,执行力,风险管理,市场适应,交易心理,系统思维,薄弱维度,注册时间,测评时间,最后活跃";
+    const rows = filtered.map(({ user: u, diagnosticSummary }) => [
       u.id,
       escapeCSV(u.phone),
       escapeCSV(u.nickname),
@@ -969,13 +1046,16 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
       u.login_days,
       escapeCSV(u.trader_type_code ? (TRADER_TYPE_NAMES[u.trader_type_code] || u.trader_type_code) : ""),
       u.avg_score ?? "",
-      u.scores?.EDGE ?? "",
-      u.scores?.EXEC ?? "",
-      u.scores?.RISK ?? "",
-      u.scores?.ADAPT ?? "",
-      u.scores?.MENTAL ?? "",
-      u.scores?.SYSTEM ?? "",
-      escapeCSV(getWeakest(u.scores)),
+      escapeCSV(diagnosticSummary.traderStageLabel),
+      escapeCSV(diagnosticSummary.paymentIntentLabel),
+      escapeCSV(diagnosticSummary.recommendedPath),
+      diagnosticSummary.dimensionScores?.EDGE ?? "",
+      diagnosticSummary.dimensionScores?.EXEC ?? "",
+      diagnosticSummary.dimensionScores?.RISK ?? "",
+      diagnosticSummary.dimensionScores?.ADAPT ?? "",
+      diagnosticSummary.dimensionScores?.MENTAL ?? "",
+      diagnosticSummary.dimensionScores?.SYSTEM ?? "",
+      escapeCSV(getWeakest(diagnosticSummary)),
       u.created_at ? new Date(u.created_at).toLocaleDateString("zh-CN") : "",
       u.quiz_completed_at ? new Date(u.quiz_completed_at).toLocaleDateString("zh-CN") : "",
       u.last_active_at ? new Date(u.last_active_at).toLocaleDateString("zh-CN") : "",
@@ -1019,6 +1099,28 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
             data-testid="input-search-users"
           />
         </div>
+        <select
+          value={stageFilter}
+          onChange={(e) => setStageFilter(e.target.value)}
+          className="px-3 py-2 rounded-xl text-xs outline-none"
+          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: 'var(--text-strong)' }}
+        >
+          <option value="all">全部阶段</option>
+          {stageOptions.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+        <select
+          value={paymentFilter}
+          onChange={(e) => setPaymentFilter(e.target.value)}
+          className="px-3 py-2 rounded-xl text-xs outline-none"
+          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: 'var(--text-strong)' }}
+        >
+          <option value="all">全部意向</option>
+          {paymentOptions.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
         <button
           onClick={exportCSV}
           className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-medium shrink-0"
@@ -1031,7 +1133,7 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
       </div>
 
       <div className="text-xs flex items-center justify-between" style={{ color: 'var(--text-muted)' }}>
-        <span>共 {filtered.length} 位客户{search && ` (筛选自 ${users.length})`}</span>
+        <span>共 {filtered.length} 位客户{(search || stageFilter !== "all" || paymentFilter !== "all") && ` (筛选自 ${users.length})`}</span>
         <button onClick={onRefresh} disabled={loading} className="flex items-center gap-1" data-testid="button-refresh-users">
           <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
           刷新
@@ -1044,7 +1146,7 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{search ? "未找到匹配客户" : "暂无客户数据"}</p>
           </div>
         ) : (
-          filtered.map(u => {
+          filtered.map(({ user: u, diagnosticSummary }) => {
             const uType = u.trader_type_code ? traderTypes[u.trader_type_code] : null;
             return (
             <div
@@ -1052,7 +1154,7 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
               className="rounded-xl p-3 cursor-pointer transition-all active:scale-[0.98]"
               style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}
               data-testid={`user-card-${u.id}`}
-              onClick={() => u.trader_type_code && setSelectedUser(u)}
+              onClick={() => (u.trader_type_code || diagnosticSummary.mode === "orderflow") && setSelectedUser(u)}
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -1092,18 +1194,52 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
                 </div>
               </div>
 
-              <div className="space-y-1.5 ml-10">
+                <div className="space-y-1.5 ml-10">
                 <CopyRow icon={<Phone className="w-3 h-3" />} label="手机" value={u.phone} onCopy={copyText} copiedId={copiedId} />
                 {u.wechat_id && (
                   <CopyRow icon={<MessageSquare className="w-3 h-3" />} label="微信" value={u.wechat_id} onCopy={copyText} copiedId={copiedId} />
                 )}
-                {u.scores && (
+                {(diagnosticSummary.traderStageLabel || diagnosticSummary.paymentIntentLabel || diagnosticSummary.recommendedPath) && (
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    {diagnosticSummary.traderStageLabel && (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(var(--gold-rgb), 0.12)', color: 'var(--gold)' }}>
+                        {diagnosticSummary.traderStageLabel}
+                      </span>
+                    )}
+                    {diagnosticSummary.paymentIntentLabel && (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(var(--primary-rgb), 0.12)', color: 'var(--primary)' }}>
+                        {diagnosticSummary.paymentIntentLabel}
+                      </span>
+                    )}
+                    {diagnosticSummary.recommendedPath && (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }}>
+                        {diagnosticSummary.recommendedPath}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {diagnosticSummary.dimensionScores && diagnosticSummary.mode === "legacy" && (
                   <div className="flex items-center gap-1.5 mt-1.5">
                     {DIMENSION_KEYS.map(k => {
-                      const s = u.scores![k] ?? 0;
+                      const s = diagnosticSummary.dimensionScores![k] ?? 0;
                       const color = s >= 70 ? '#07C160' : s >= 50 ? '#F59E0B' : '#EF4444';
                       return (
                         <div key={k} className="flex-1">
+                          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                            <div className="h-full rounded-full" style={{ background: color, width: `${s}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {diagnosticSummary.dimensionScores && diagnosticSummary.mode === "orderflow" && (
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    {ORDERFLOW_DIMENSION_KEYS.map((key) => {
+                      const s = diagnosticSummary.dimensionScores![key] ?? 0;
+                      const color = s >= 70 ? '#07C160' : s >= 50 ? '#F59E0B' : '#EF4444';
+                      return (
+                        <div key={key} className="flex-1">
                           <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
                             <div className="h-full rounded-full" style={{ background: color, width: `${s}%` }} />
                           </div>
