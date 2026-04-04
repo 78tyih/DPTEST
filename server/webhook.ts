@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 const WEBHOOK_URL = process.env.WECHAT_WEBHOOK_URL || "";
 
 const recentSubmits = new Map<string, number>();

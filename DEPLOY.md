@@ -350,7 +350,7 @@ pm2 restart deltapex
 | `PORT` | 否 | 应用端口，默认 5000 |
 | `NODE_ENV` | 是 | 设为 `production` |
 | `BASE_URL` | 否 | 站点完整域名（含 https://），用于生成分享链接 |
-| `WECHAT_WEBHOOK_URL` | 否 | 企业微信群机器人 Webhook 地址（已有默认值） |
+| `WECHAT_WEBHOOK_URL` | 否 | 企业微信群机器人 Webhook 地址；未设置时不会推送 |
 
 ---
 
