@@ -103,6 +103,14 @@ interface AdminUser {
   quiz_completed_at: string | null;
 }
 
+interface AdminUsersResponse {
+  items: AdminUser[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 const TRADER_TYPE_NAMES: Record<string, string> = {
   RS: "风险猎手", RM: "稳健策略师", RT: "技术分析师", RI: "直觉交易者",
   AS: "激进狙击手", AM: "平衡操盘手", AT: "量化分析师", AI: "灵感交易者",
@@ -950,11 +958,26 @@ function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; on
   );
 }
 
-function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading: boolean; onRefresh: () => void }) {
+function UsersPanel({
+  users,
+  loading,
+  onRefresh,
+  total,
+  page,
+  totalPages,
+  query,
+  onQueryChange,
+}: {
+  users: AdminUser[];
+  loading: boolean;
+  onRefresh: () => void;
+  total: number;
+  page: number;
+  totalPages: number;
+  query: { search: string; stage: string; payment: string; path: string };
+  onQueryChange: (patch: Partial<{ search: string; stage: string; payment: string; path: string; page: number }>) => void;
+}) {
   const { toast } = useToast();
-  const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState("all");
-  const [paymentFilter, setPaymentFilter] = useState("all");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
 
@@ -964,26 +987,6 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
   }));
   const stageOptions = Array.from(new Set(enrichedUsers.map(({ diagnosticSummary }) => diagnosticSummary.traderStageLabel).filter(Boolean)));
   const paymentOptions = Array.from(new Set(enrichedUsers.map(({ diagnosticSummary }) => diagnosticSummary.paymentIntentLabel).filter(Boolean)));
-
-  const filtered = enrichedUsers.filter(({ user: u, diagnosticSummary }) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    const matchesSearch = (
-      u.phone.includes(q) ||
-      (u.nickname && u.nickname.toLowerCase().includes(q)) ||
-      (u.wechat_id && u.wechat_id.toLowerCase().includes(q)) ||
-      (u.trader_type_code && (TRADER_TYPE_NAMES[u.trader_type_code] || u.trader_type_code).toLowerCase().includes(q)) ||
-      diagnosticSummary.traderStageLabel.toLowerCase().includes(q) ||
-      diagnosticSummary.paymentIntentLabel.toLowerCase().includes(q) ||
-      diagnosticSummary.recommendedPath.toLowerCase().includes(q) ||
-      diagnosticSummary.segmentTagLabels.some((label) => label.toLowerCase().includes(q))
-    );
-    return matchesSearch;
-  }).filter(({ diagnosticSummary }) => {
-    const matchesStage = stageFilter === "all" || diagnosticSummary.traderStageLabel === stageFilter;
-    const matchesPayment = paymentFilter === "all" || diagnosticSummary.paymentIntentLabel === paymentFilter;
-    return matchesStage && matchesPayment;
-  });
 
   const copyText = useCallback(async (text: string, label: string) => {
     try {
@@ -1031,7 +1034,7 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
       return DIMENSION_NAMES[min[0]] || min[0];
     };
     const header = "ID,手机号,昵称,微信号,来源,交易品种,具体标的,资金体量,交易时长,交易体系,阶段,登录天数,交易者类型,综合评分,交易阶段,付费意向,推荐路径,认知格局,执行力,风险管理,市场适应,交易心理,系统思维,薄弱维度,注册时间,测评时间,最后活跃";
-    const rows = filtered.map(({ user: u, diagnosticSummary }) => [
+    const rows = enrichedUsers.map(({ user: u, diagnosticSummary }) => [
       u.id,
       escapeCSV(u.phone),
       escapeCSV(u.nickname),
@@ -1068,8 +1071,8 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
     a.download = `客户资料_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast({ title: `已导出 ${filtered.length} 条记录` });
-  }, [filtered, toast]);
+    toast({ title: `已导出 ${enrichedUsers.length} 条记录` });
+  }, [enrichedUsers, toast]);
 
   const formatDate = (d: string | null) => {
     if (!d) return "-";
@@ -1092,16 +1095,16 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
           <input
             type="text"
             placeholder="搜索手机号 / 昵称 / 微信号"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            value={query.search}
+            onChange={e => onQueryChange({ search: e.target.value, page: 1 })}
             className="w-full pl-9 pr-3 py-2 rounded-xl text-xs outline-none"
             style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: 'var(--text-strong)' }}
             data-testid="input-search-users"
           />
         </div>
         <select
-          value={stageFilter}
-          onChange={(e) => setStageFilter(e.target.value)}
+          value={query.stage}
+          onChange={(e) => onQueryChange({ stage: e.target.value, page: 1 })}
           className="px-3 py-2 rounded-xl text-xs outline-none"
           style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: 'var(--text-strong)' }}
         >
@@ -1111,8 +1114,8 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
           ))}
         </select>
         <select
-          value={paymentFilter}
-          onChange={(e) => setPaymentFilter(e.target.value)}
+          value={query.payment}
+          onChange={(e) => onQueryChange({ payment: e.target.value, page: 1 })}
           className="px-3 py-2 rounded-xl text-xs outline-none"
           style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: 'var(--text-strong)' }}
         >
@@ -1133,7 +1136,7 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
       </div>
 
       <div className="text-xs flex items-center justify-between" style={{ color: 'var(--text-muted)' }}>
-        <span>共 {filtered.length} 位客户{(search || stageFilter !== "all" || paymentFilter !== "all") && ` (筛选自 ${users.length})`}</span>
+        <span>共 {total} 位客户{(query.search || query.stage !== "all" || query.payment !== "all") && ` · 当前第 ${page}/${totalPages} 页`}</span>
         <button onClick={onRefresh} disabled={loading} className="flex items-center gap-1" data-testid="button-refresh-users">
           <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
           刷新
@@ -1141,12 +1144,12 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
       </div>
 
       <div className="space-y-2">
-        {filtered.length === 0 ? (
+        {enrichedUsers.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{search ? "未找到匹配客户" : "暂无客户数据"}</p>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{query.search ? "未找到匹配客户" : "暂无客户数据"}</p>
           </div>
         ) : (
-          filtered.map(({ user: u, diagnosticSummary }) => {
+          enrichedUsers.map(({ user: u, diagnosticSummary }) => {
             const uType = u.trader_type_code ? traderTypes[u.trader_type_code] : null;
             return (
             <div
@@ -1263,6 +1266,30 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
           );})
           )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <button
+            onClick={() => onQueryChange({ page: page - 1 })}
+            disabled={page <= 1 || loading}
+            className="px-3 py-2 rounded-xl text-xs"
+            style={{ background: 'rgba(255,255,255,0.04)', color: page <= 1 ? 'rgba(255,255,255,0.3)' : 'var(--text-strong)' }}
+          >
+            上一页
+          </button>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            第 {page} / {totalPages} 页
+          </span>
+          <button
+            onClick={() => onQueryChange({ page: page + 1 })}
+            disabled={page >= totalPages || loading}
+            className="px-3 py-2 rounded-xl text-xs"
+            style={{ background: 'rgba(255,255,255,0.04)', color: page >= totalPages ? 'rgba(255,255,255,0.3)' : 'var(--text-strong)' }}
+          >
+            下一页
+          </button>
+        </div>
+      )}
 
       <AnimatePresence>
         {selectedUser && (
@@ -1717,7 +1744,18 @@ export default function AdminPage() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [adminUsersTotal, setAdminUsersTotal] = useState(0);
+  const [adminUsersPage, setAdminUsersPage] = useState(1);
+  const [adminUsersTotalPages, setAdminUsersTotalPages] = useState(1);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [userQuery, setUserQuery] = useState({
+    search: "",
+    stage: "all",
+    payment: "all",
+    path: "all",
+    page: 1,
+    pageSize: 20,
+  });
 
   const checkSession = useCallback(async () => {
     try {
@@ -1756,13 +1794,27 @@ export default function AdminPage() {
   const fetchUsers = useCallback(async () => {
     setUsersLoading(true);
     try {
-      const res = await fetch("/api/admin/users", { credentials: "include" });
+      const params = new URLSearchParams();
+      if (userQuery.search) params.set("search", userQuery.search);
+      if (userQuery.stage !== "all") params.set("stage", userQuery.stage);
+      if (userQuery.payment !== "all") params.set("payment", userQuery.payment);
+      if (userQuery.path !== "all") params.set("path", userQuery.path);
+      params.set("page", String(userQuery.page));
+      params.set("pageSize", String(userQuery.pageSize));
+      const res = await fetch(`/api/admin/users?${params.toString()}`, { credentials: "include" });
       if (res.ok) {
-        const data = await res.json();
-        setAdminUsers(data);
+        const data: AdminUsersResponse = await res.json();
+        setAdminUsers(data.items);
+        setAdminUsersTotal(data.total);
+        setAdminUsersPage(data.page);
+        setAdminUsersTotalPages(data.totalPages);
       }
     } catch {}
     setUsersLoading(false);
+  }, [userQuery]);
+
+  const handleUserQueryChange = useCallback((patch: Partial<typeof userQuery>) => {
+    setUserQuery((prev) => ({ ...prev, ...patch }));
   }, []);
 
   useEffect(() => {
@@ -1775,6 +1827,12 @@ export default function AdminPage() {
       fetchStats();
     }
   }, [isAdmin, fetchContacts, fetchStats]);
+
+  useEffect(() => {
+    if (isAdmin && tab === "users") {
+      fetchUsers();
+    }
+  }, [isAdmin, tab, fetchUsers]);
 
   const handleCheckAll = useCallback(async () => {
     setCheckingAll(true);
@@ -1921,7 +1979,16 @@ export default function AdminPage() {
         )}
 
         {tab === "users" && (
-          <UsersPanel users={adminUsers} loading={usersLoading} onRefresh={fetchUsers} />
+          <UsersPanel
+            users={adminUsers}
+            loading={usersLoading}
+            onRefresh={fetchUsers}
+            total={adminUsersTotal}
+            page={adminUsersPage}
+            totalPages={adminUsersTotalPages}
+            query={userQuery}
+            onQueryChange={handleUserQueryChange}
+          />
         )}
 
         {tab === "stats" && (

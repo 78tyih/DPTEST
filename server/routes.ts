@@ -9,6 +9,7 @@ import { pool, db } from "./db";
 import { sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { getAdminStats, getExternalStats } from "./stats";
+import { filterAdminUsers } from "./adminUsers";
 
 let salesCounter = 0;
 
@@ -794,7 +795,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/users", requireAdmin, async (_req, res) => {
+  app.get("/api/admin/users", requireAdmin, async (req, res) => {
     try {
       const result = await db.execute(sql`
         SELECT
@@ -820,7 +821,25 @@ export async function registerRoutes(
         ) q ON true
         ORDER BY u.created_at DESC
       `);
-      res.json(result.rows || result || []);
+      const rawRows = (result.rows || result || []) as Array<{
+        id: number;
+        phone: string;
+        nickname: string | null;
+        wechat_id: string | null;
+        trader_type_code: string | null;
+        scores: unknown;
+      }>;
+      const page = Number.parseInt(String(req.query.page ?? "1"), 10);
+      const pageSize = Number.parseInt(String(req.query.pageSize ?? "20"), 10);
+      const filtered = filterAdminUsers(rawRows, {
+        search: typeof req.query.search === "string" ? req.query.search : "",
+        stage: typeof req.query.stage === "string" ? req.query.stage : "",
+        payment: typeof req.query.payment === "string" ? req.query.payment : "",
+        path: typeof req.query.path === "string" ? req.query.path : "",
+        page,
+        pageSize,
+      });
+      res.json(filtered);
     } catch (err) {
       console.error("[admin] users error:", err);
       res.status(500).json({ message: "获取用户列表失败" });
