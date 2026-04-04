@@ -29,6 +29,9 @@ export interface AdminUsersPage<T> {
   page: number;
   pageSize: number;
   totalPages: number;
+  availableStages: string[];
+  availablePayments: string[];
+  availablePaths: string[];
 }
 
 export function filterAdminUsers<T extends AdminUserLike>(
@@ -78,6 +81,15 @@ export function filterAdminUsers<T extends AdminUserLike>(
   const safePage = Math.min(page, totalPages);
   const start = (safePage - 1) * pageSize;
   const items = filtered.slice(start, start + pageSize);
+  const availableStages = Array.from(new Set(users
+    .map((user) => deriveServerOrderflowSummary(user.scores).traderStageLabel)
+    .filter(Boolean)));
+  const availablePayments = Array.from(new Set(users
+    .map((user) => deriveServerOrderflowSummary(user.scores).paymentIntentLabel)
+    .filter(Boolean)));
+  const availablePaths = Array.from(new Set(users
+    .map((user) => deriveServerOrderflowSummary(user.scores).recommendedPath)
+    .filter(Boolean)));
 
   return {
     items,
@@ -85,6 +97,9 @@ export function filterAdminUsers<T extends AdminUserLike>(
     page: safePage,
     pageSize,
     totalPages,
+    availableStages,
+    availablePayments,
+    availablePaths,
   };
 }
 

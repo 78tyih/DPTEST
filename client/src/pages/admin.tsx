@@ -109,6 +109,9 @@ interface AdminUsersResponse {
   page: number;
   pageSize: number;
   totalPages: number;
+  availableStages: string[];
+  availablePayments: string[];
+  availablePaths: string[];
 }
 
 const TRADER_TYPE_NAMES: Record<string, string> = {
@@ -965,6 +968,8 @@ function UsersPanel({
   total,
   page,
   totalPages,
+  availableStages,
+  availablePayments,
   query,
   onQueryChange,
 }: {
@@ -974,6 +979,8 @@ function UsersPanel({
   total: number;
   page: number;
   totalPages: number;
+  availableStages: string[];
+  availablePayments: string[];
   query: { search: string; stage: string; payment: string; path: string };
   onQueryChange: (patch: Partial<{ search: string; stage: string; payment: string; path: string; page: number }>) => void;
 }) {
@@ -985,9 +992,6 @@ function UsersPanel({
     user,
     diagnosticSummary: deriveAdminOrderflowSummary(user.scores),
   }));
-  const stageOptions = Array.from(new Set(enrichedUsers.map(({ diagnosticSummary }) => diagnosticSummary.traderStageLabel).filter(Boolean)));
-  const paymentOptions = Array.from(new Set(enrichedUsers.map(({ diagnosticSummary }) => diagnosticSummary.paymentIntentLabel).filter(Boolean)));
-
   const copyText = useCallback(async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -1109,7 +1113,7 @@ function UsersPanel({
           style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: 'var(--text-strong)' }}
         >
           <option value="all">全部阶段</option>
-          {stageOptions.map((option) => (
+          {availableStages.map((option) => (
             <option key={option} value={option}>{option}</option>
           ))}
         </select>
@@ -1120,7 +1124,7 @@ function UsersPanel({
           style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: 'var(--text-strong)' }}
         >
           <option value="all">全部意向</option>
-          {paymentOptions.map((option) => (
+          {availablePayments.map((option) => (
             <option key={option} value={option}>{option}</option>
           ))}
         </select>
@@ -1747,6 +1751,8 @@ export default function AdminPage() {
   const [adminUsersTotal, setAdminUsersTotal] = useState(0);
   const [adminUsersPage, setAdminUsersPage] = useState(1);
   const [adminUsersTotalPages, setAdminUsersTotalPages] = useState(1);
+  const [adminAvailableStages, setAdminAvailableStages] = useState<string[]>([]);
+  const [adminAvailablePayments, setAdminAvailablePayments] = useState<string[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [userQuery, setUserQuery] = useState({
     search: "",
@@ -1808,6 +1814,8 @@ export default function AdminPage() {
         setAdminUsersTotal(data.total);
         setAdminUsersPage(data.page);
         setAdminUsersTotalPages(data.totalPages);
+        setAdminAvailableStages(data.availableStages);
+        setAdminAvailablePayments(data.availablePayments);
       }
     } catch {}
     setUsersLoading(false);
@@ -1986,6 +1994,8 @@ export default function AdminPage() {
             total={adminUsersTotal}
             page={adminUsersPage}
             totalPages={adminUsersTotalPages}
+            availableStages={adminAvailableStages}
+            availablePayments={adminAvailablePayments}
             query={userQuery}
             onQueryChange={handleUserQueryChange}
           />

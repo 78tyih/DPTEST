@@ -65,5 +65,9 @@ assert.equal(paged.total, 3);
 assert.equal(paged.totalPages, 3);
 assert.equal(paged.items.length, 1);
 assert.equal(paged.items[0]?.id, 2);
+assert.equal(paged.availableStages.includes("交易大师型"), true);
+assert.equal(paged.availableStages.includes("订单流小白"), true);
+assert.equal(paged.availablePayments.includes("高付费意向"), true);
+assert.equal(paged.availablePayments.includes("免费资料意向"), true);
 
 console.log("test-admin-user-filters: ok");
