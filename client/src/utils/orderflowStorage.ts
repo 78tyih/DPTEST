@@ -7,6 +7,7 @@ import type {
 } from "@/data/orderflowDiagnostic";
 import type { OrderflowSystemMapping } from "@/data/orderflowLogicMap";
 import type { OrderflowSalesPlaybook } from "@/data/orderflowSalesPlaybook";
+import type { OrderflowCustomerProfile } from "@/data/orderflowCustomerProfile";
 import { getQuestionSetByTrack, type OrderflowDiagnosticResult } from "@/utils/orderflowDiagnostic";
 
 export interface StoredOrderflowScores {
@@ -22,6 +23,7 @@ export interface StoredOrderflowScores {
   bottomDimensions: DiagnosticDimension[];
   systemMapping: OrderflowSystemMapping;
   salesPlaybook: OrderflowSalesPlaybook;
+  customerProfile: OrderflowCustomerProfile;
   userSummary: string;
   salesSummary: OrderflowDiagnosticResult["salesSummary"];
 }
@@ -57,6 +59,7 @@ export function buildOrderflowQuizSubmission(
       bottomDimensions: result.bottomDimensions,
       systemMapping: result.systemMapping,
       salesPlaybook: result.salesPlaybook,
+      customerProfile: result.customerProfile,
       userSummary: result.userSummary,
       salesSummary: result.salesSummary,
     },
@@ -126,6 +129,22 @@ export function reconstructOrderflowResultFromStoredRecord(
       materialsToSend: stored.unlockRewards?.map((reward) => reward.title) ?? [],
       avoid: "历史记录缺少剧本，请人工判断。",
       crmTag: "历史记录 / 待补标签",
+    },
+    customerProfile: stored.customerProfile ?? {
+      traderStage: {
+        id: "explorer",
+        label: "探索型交易者",
+        summary: "历史记录缺少交易阶段字段，按中性探索状态回填。",
+        salesHint: "先结合当前结果做人工判断。",
+      },
+      paymentIntent: {
+        id: "warming-up",
+        label: "待培育付费意向",
+        summary: "历史记录缺少付费意向字段，按待培育状态回填。",
+        salesHint: "先用当前内容链路继续观察互动。",
+        isPayingLikely: false,
+      },
+      brief: "历史记录缺少客户分层标签，已按中性状态回填。",
     },
     userSummary: stored.userSummary ?? stored.scoreBand.summary,
     salesSummary: stored.salesSummary ?? {

@@ -130,6 +130,36 @@ export default function OrderflowDiagnosticView({
               style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
             >
               <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                交易阶段
+              </p>
+              <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-strong)" }}>
+                {result.customerProfile.traderStage.label}
+              </p>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                {result.customerProfile.traderStage.summary}
+              </p>
+            </div>
+            <div
+              className="rounded-xl px-4 py-3"
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                付费意向
+              </p>
+              <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-strong)" }}>
+                {result.customerProfile.paymentIntent.label}
+              </p>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                {result.customerProfile.paymentIntent.summary}
+              </p>
+            </div>
+          </div>
+          <div className="grid md:grid-cols-2 gap-3 mb-4">
+            <div
+              className="rounded-xl px-4 py-3"
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
                 当前强项
               </p>
               <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>

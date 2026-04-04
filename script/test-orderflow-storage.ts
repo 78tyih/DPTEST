@@ -18,6 +18,7 @@ assert.equal(submission.scores.userSummary.length > 0, true);
 assert.equal(submission.scores.salesSummary.priorityLabel.length > 0, true);
 assert.equal(submission.scores.systemMapping.route.label.length > 0, true);
 assert.equal(submission.scores.salesPlaybook.crmTag.length > 0, true);
+assert.equal(submission.scores.customerProfile.traderStage.label.length > 0, true);
 
 const reconstructed = reconstructOrderflowResultFromStoredRecord({
   scores: submission.scores,
@@ -34,5 +35,6 @@ assert.equal(reconstructed?.userSummary, result.userSummary);
 assert.equal(reconstructed?.salesSummary.priorityLabel, result.salesSummary.priorityLabel);
 assert.equal(reconstructed?.systemMapping.route.label, result.systemMapping.route.label);
 assert.equal(reconstructed?.salesPlaybook.crmTag, result.salesPlaybook.crmTag);
+assert.equal(reconstructed?.customerProfile.paymentIntent.label, result.customerProfile.paymentIntent.label);
 
 console.log("test-orderflow-storage: ok");

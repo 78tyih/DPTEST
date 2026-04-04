@@ -17,6 +17,8 @@ assert.equal(starterResult.salesSummary.priorityLabel.length > 0, true);
 assert.equal(starterResult.salesSummary.conversationHook.length > 0, true);
 assert.equal(starterResult.systemMapping.route.label.length > 0, true);
 assert.equal(starterResult.salesPlaybook.responseWindow.length > 0, true);
+assert.equal(starterResult.customerProfile.traderStage.label.length > 0, true);
+assert.equal(starterResult.customerProfile.paymentIntent.label.length > 0, true);
 
 const deepAnswers = new Array(getQuestionSetByTrack("deep").length).fill(0);
 const deepResult = calculateOrderflowDiagnosticResult("deep", deepAnswers);
@@ -31,6 +33,15 @@ assert.equal(deepResult.salesSummary.fitConclusion.length > 0, true);
 assert.equal(deepResult.salesSummary.nextStep.length > 0, true);
 assert.equal(deepResult.systemMapping.route.id.length > 0, true);
 assert.equal(deepResult.salesPlaybook.crmTag.length > 0, true);
+assert.equal(deepResult.customerProfile.traderStage.label.length > 0, true);
+assert.equal(deepResult.customerProfile.paymentIntent.label.length > 0, true);
+
+const lowIntentStarter = calculateOrderflowDiagnosticResult("starter", [3, 0, 0, 1, 2, 0, 3]);
+const highIntentDeep = calculateOrderflowDiagnosticResult("deep", [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]);
+
+assert.equal(lowIntentStarter.customerProfile.paymentIntent.isPayingLikely, false);
+assert.equal(highIntentDeep.customerProfile.paymentIntent.isPayingLikely, true);
+assert.notEqual(lowIntentStarter.customerProfile.traderStage.id, highIntentDeep.customerProfile.traderStage.id);
 
 const payload = buildOrderflowResultWebhookPayload({
   phone: "13800000000",
@@ -50,5 +61,6 @@ assert.equal(payload.salesSummary.priorityLabel, deepResult.salesSummary.priorit
 assert.equal(payload.salesSummary.riskAlert.length > 0, true);
 assert.equal(payload.systemMapping.route.label, deepResult.systemMapping.route.label);
 assert.equal(payload.salesPlaybook.firstTouch, deepResult.salesPlaybook.firstTouch);
+assert.equal(payload.customerProfile.paymentIntent.label, deepResult.customerProfile.paymentIntent.label);
 
 console.log("test-orderflow-diagnostic: ok");

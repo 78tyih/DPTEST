@@ -15,6 +15,10 @@ import {
 } from "@/data/orderflowDiagnostic";
 import { resolveOrderflowSystemMapping, type OrderflowSystemMapping } from "@/data/orderflowLogicMap";
 import { buildOrderflowSalesPlaybook, type OrderflowSalesPlaybook } from "@/data/orderflowSalesPlaybook";
+import {
+  resolveOrderflowCustomerProfile,
+  type OrderflowCustomerProfile,
+} from "@/data/orderflowCustomerProfile";
 
 export interface OrderflowDiagnosticResult {
   kind: "orderflow";
@@ -33,6 +37,7 @@ export interface OrderflowDiagnosticResult {
   recommendedAction: string;
   systemMapping: OrderflowSystemMapping;
   salesPlaybook: OrderflowSalesPlaybook;
+  customerProfile: OrderflowCustomerProfile;
   userSummary: string;
   salesSummary: {
     priorityLabel: string;
@@ -272,6 +277,12 @@ export function calculateOrderflowDiagnosticResult(
     segmentTagIds: segmentTags.map((tag) => tag.id),
     unlockRewardTitles: unlockRewards.map((reward) => reward.title),
   });
+  const customerProfile = resolveOrderflowCustomerProfile({
+    trackId,
+    avgScore,
+    normalizedScores,
+    segmentTagIds: segmentTags.map((tag) => tag.id),
+  });
 
   return {
     kind: "orderflow",
@@ -290,6 +301,7 @@ export function calculateOrderflowDiagnosticResult(
     recommendedAction: systemMapping.route.nextStep,
     systemMapping,
     salesPlaybook,
+    customerProfile,
     userSummary,
     salesSummary,
   };

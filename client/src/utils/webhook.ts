@@ -1,4 +1,5 @@
 import { salesStrategy } from "@/data/salesStrategy";
+import type { OrderflowCustomerProfile } from "@/data/orderflowCustomerProfile";
 import type { OrderflowSystemMapping } from "@/data/orderflowLogicMap";
 import type { OrderflowSalesPlaybook } from "@/data/orderflowSalesPlaybook";
 import { rankTiers, traderTypes } from "@/data/traderTypes";
@@ -38,6 +39,7 @@ export interface OrderflowResultWebhookParams {
   recommendedPath: string;
   systemMapping: OrderflowSystemMapping;
   salesPlaybook: OrderflowSalesPlaybook;
+  customerProfile: OrderflowCustomerProfile;
   userSummary: string;
   salesSummary: OrderflowDiagnosticResult["salesSummary"];
   verifyCode?: string;
@@ -120,6 +122,7 @@ export function buildOrderflowResultWebhookPayload({
     recommendedPath: result.recommendedPath,
     systemMapping: result.systemMapping,
     salesPlaybook: result.salesPlaybook,
+    customerProfile: result.customerProfile,
     userSummary: result.userSummary,
     salesSummary: result.salesSummary,
     verifyCode,

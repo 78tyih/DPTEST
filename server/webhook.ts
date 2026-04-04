@@ -137,6 +137,22 @@ interface OrderflowResultWebhookPayload {
     avoid: string;
     crmTag: string;
   };
+  customerProfile: {
+    traderStage: {
+      id: string;
+      label: string;
+      summary: string;
+      salesHint: string;
+    };
+    paymentIntent: {
+      id: string;
+      label: string;
+      summary: string;
+      salesHint: string;
+      isPayingLikely: boolean;
+    };
+    brief: string;
+  };
   userSummary: string;
   salesSummary: {
     priorityLabel: string;
@@ -264,8 +280,15 @@ async function sendOrderflowDiagnosticNotification(payload: OrderflowResultWebho
     `**测评轨道：** ${trackLabel}`,
     `**结果分层：** <font color="info">${payload.scoreBand.title}</font>`,
     `**跟进优先级：** <font color="warning">${payload.salesSummary.priorityLabel}</font>`,
+    `**交易阶段：** ${payload.customerProfile.traderStage.label}`,
+    `**付费意向：** ${payload.customerProfile.paymentIntent.label}`,
     `**推荐路径：** ${payload.recommendedPath}`,
     `**建议动作：** ${payload.recommendedAction}`,
+    ``,
+    `### 👥 客群分层`,
+    `**阶段判断：** ${payload.customerProfile.traderStage.summary}`,
+    `**意向判断：** ${payload.customerProfile.paymentIntent.summary}`,
+    `**销售提示：** ${payload.customerProfile.paymentIntent.salesHint}`,
     ``,
     `### 🧩 交易系统映射`,
     `**映射系统：** ${payload.systemMapping.route.label}`,
