@@ -1,4 +1,5 @@
 import "dotenv/config";
+import type { AdminSalesPoolStats } from "./adminSalesPoolStats";
 
 const WEBHOOK_URL = process.env.WECHAT_WEBHOOK_URL || "";
 
@@ -161,6 +162,7 @@ interface OrderflowResultWebhookPayload {
     riskAlert: string;
     nextStep: string;
   };
+  salesPoolSnapshot?: AdminSalesPoolStats;
   reportUrl?: string;
   verifyCode?: string;
 }
@@ -182,6 +184,39 @@ const dimNames: Record<string, string> = {
 
 function isOrderflowResultPayload(payload: ResultWebhookPayload | OrderflowResultWebhookPayload): payload is OrderflowResultWebhookPayload {
   return "selectedTrack" in payload;
+}
+
+export function formatSalesPoolSnapshotMarkdown(snapshot?: AdminSalesPoolStats): string {
+  if (!snapshot || (snapshot.cards.length === 0 && snapshot.pendingUsers.length === 0)) {
+    return "";
+  }
+
+  const cardLines = snapshot.cards
+    .filter((card) => card.total > 0 || card.todayNew > 0 || card.pendingFollowUp > 0)
+    .slice(0, 5)
+    .map((card) => `- ${card.label}：总 ${card.total} · 今日新增 ${card.todayNew} · 待跟进 ${card.pendingFollowUp}`)
+    .join("\n");
+
+  const pendingLines = snapshot.pendingUsers.length > 0
+    ? snapshot.pendingUsers
+        .slice(0, 5)
+        .map((user) => {
+          const name = user.nickname || user.phone;
+          const labels = user.poolLabels.slice().sort().join(" / ");
+          const summaryParts = [user.traderStageLabel, user.paymentIntentLabel, user.recommendedPath].filter(Boolean);
+          return `- ${name}（${user.phone}）｜${labels}${summaryParts.length ? `｜${summaryParts.join(" / ")}` : ""}`;
+        })
+        .join("\n")
+    : "- 当前没有待跟进客户";
+
+  return [
+    `### 📈 当前销售池快照`,
+    cardLines || "- 当前暂无销售池数据",
+    ``,
+    `### ⏰ 待跟进客户`,
+    pendingLines,
+    ``,
+  ].join("\n");
 }
 
 async function sendLegacyResultNotification(payload: ResultWebhookPayload): Promise<{ success: boolean }> {
@@ -264,6 +299,7 @@ async function sendOrderflowDiagnosticNotification(payload: OrderflowResultWebho
   const rewardLines = payload.unlockRewards.map((reward) => `- ${reward.title}：${reward.description}`).join('\n');
   const materialLines = payload.salesPlaybook.materialsToSend.map((item) => `- ${item}`).join('\n');
   const trackLabel = payload.selectedTrack === "starter" ? "浅度测评" : "深度测评";
+  const salesPoolSnapshotBlock = formatSalesPoolSnapshotMarkdown(payload.salesPoolSnapshot);
 
   const content = [
     `## 🎯 订单流诊断报告 — 请按标签跟进`,
@@ -325,6 +361,7 @@ async function sendOrderflowDiagnosticNotification(payload: OrderflowResultWebho
     `### 🎁 已解锁资料`,
     rewardLines,
     ``,
+    ...(salesPoolSnapshotBlock ? [salesPoolSnapshotBlock] : []),
     `---`,
     `💡 **备注：** ${payload.scoreBand.summary}`,
     ...(payload.reportUrl ? [

@@ -605,6 +605,7 @@ export async function registerRoutes(
         const { wechatName, scores, traderType, rank, avgScore, salesStrategy, verifyCode } = req.body;
         sendResultNotification({ phone, wechatName, scores, traderType, rank, avgScore, salesStrategy, reportUrl, verifyCode });
       } else {
+        const salesPoolSnapshot = buildAdminSalesPoolStats(await loadAdminUsersSnapshot());
         const {
           wechatName,
           selectedTrack,
@@ -636,6 +637,7 @@ export async function registerRoutes(
           customerProfile,
           userSummary,
           salesSummary,
+          salesPoolSnapshot,
           reportUrl,
           verifyCode,
         });
