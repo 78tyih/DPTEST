@@ -1,7 +1,9 @@
 import { motion } from "framer-motion";
-import { ArrowRight, BookOpen, LockKeyhole, Radar, ShieldCheck, Wrench } from "lucide-react";
+import { ArrowRight, BookOpen, ExternalLink, LockKeyhole, Radar, ShieldCheck, Wrench } from "lucide-react";
 import { diagnosticDimensionLabels, diagnosticTracks } from "@/data/orderflowDiagnostic";
 import type { OrderflowDiagnosticResult } from "@/utils/orderflowDiagnostic";
+import { resolveRewardAction } from "@/utils/diagnosticLinks";
+import { useTracking } from "@/hooks/use-tracking";
 
 const ease = { duration: 0.22, ease: "easeOut" as const };
 
@@ -37,6 +39,7 @@ export default function OrderflowDiagnosticView({
 }: OrderflowDiagnosticViewProps) {
   const sortedDimensions = Object.entries(result.normalizedScores).sort((a, b) => b[1] - a[1]);
   const track = diagnosticTracks[result.trackId];
+  const { trackEvent } = useTracking();
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-0)" }}>
@@ -278,20 +281,39 @@ export default function OrderflowDiagnosticView({
             已解锁资料
           </h2>
           <div className="space-y-3">
-            {result.unlockRewards.map((reward) => (
-              <div
-                key={reward.id}
-                className="rounded-xl px-4 py-3"
-                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
-              >
-                <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-strong)" }}>
-                  {reward.title}
-                </p>
-                <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                  {reward.description}
-                </p>
-              </div>
-            ))}
+            {result.unlockRewards.map((reward) => {
+              const action = resolveRewardAction(reward);
+              return (
+                <div
+                  key={reward.id}
+                  className="rounded-xl px-4 py-3"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                >
+                  <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-strong)" }}>
+                    {reward.title}
+                  </p>
+                  <p className="text-xs leading-relaxed mb-3" style={{ color: "var(--text-muted)" }}>
+                    {reward.description}
+                  </p>
+                  <a
+                    href={action.href}
+                    target={action.external ? "_blank" : undefined}
+                    rel={action.external ? "noopener noreferrer" : undefined}
+                    onClick={() => trackEvent("diagnostic_reward_click", {
+                      rewardId: reward.id,
+                      rewardTitle: reward.title,
+                      trackId: result.trackId,
+                      href: action.href,
+                    })}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium"
+                    style={{ color: "var(--gold)" }}
+                  >
+                    {action.label}
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              );
+            })}
           </div>
         </motion.div>
 

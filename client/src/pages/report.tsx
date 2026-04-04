@@ -13,6 +13,7 @@ import RankBadge from "@/components/RankBadge";
 import { usePageView, useTracking } from "@/hooks/use-tracking";
 import OrderflowDiagnosticView from "@/components/OrderflowDiagnosticView";
 import { reconstructOrderflowResultFromStoredRecord } from "@/utils/orderflowStorage";
+import { buildSurveyEntryUrl } from "@/utils/diagnosticLinks";
 
 const ease = { duration: 0.22, ease: "easeOut" as const };
 
@@ -42,6 +43,7 @@ interface ReportData {
 export default function ReportPage() {
   const [, params] = useRoute("/report/:token");
   const token = params?.token;
+  const surveyEntryUrl = buildSurveyEntryUrl();
 
   const { data, isLoading, error } = useQuery<ReportData>({
     queryKey: ["/api/report", token],
@@ -102,7 +104,7 @@ export default function ReportPage() {
 
   const scores = data.scores as Record<Dimension, number>;
 
-  return <ReportContent traderType={traderType} rank={rank} scores={scores} avgScore={data.avgScore} tier={data.tier ?? 0} />;
+  return <ReportContent traderType={traderType} rank={rank} scores={scores} avgScore={data.avgScore} tier={data.tier ?? 0} surveyEntryUrl={surveyEntryUrl} />;
 }
 
 function ReportContent({
@@ -111,12 +113,14 @@ function ReportContent({
   scores,
   avgScore,
   tier,
+  surveyEntryUrl,
 }: {
   traderType: (typeof traderTypes)[string];
   rank: (typeof rankTiers)[number];
   scores: Record<Dimension, number>;
   avgScore: number;
   tier: number;
+  surveyEntryUrl: string;
 }) {
   const [c1, c2] = traderType?.colors ?? ['#C9A456', '#94A3B8'];
   const cc = traderType?.cardColors;
@@ -756,7 +760,7 @@ function ReportContent({
                     </p>
                   </div>
                   <div style={{ background: "#fff", borderRadius: "6px", padding: "4px", flexShrink: 0 }}>
-                    <QRCodeCanvas value="https://dptest.org" size={56} level="M" bgColor="#ffffff" fgColor="#0D0F14" />
+                    <QRCodeCanvas value={surveyEntryUrl} size={56} level="M" bgColor="#ffffff" fgColor="#0D0F14" />
                   </div>
                 </div>
               </div>

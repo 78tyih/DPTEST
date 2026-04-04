@@ -204,7 +204,7 @@ export default function LandingPage() {
         onSuccess={handleLoginSuccess}
         title="注册 / 登录后开始诊断"
         subtitle={pendingTrack ? (pendingTrack === "deep" ? "登录后进入深度测评" : "登录后进入浅度测评") : "登录后进入你的交易员主页"}
-        defaultTab="login"
+        defaultTab={pendingTrack ? "register" : "login"}
       />
     </div>
   );
