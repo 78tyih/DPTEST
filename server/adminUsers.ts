@@ -19,6 +19,7 @@ export interface AdminUsersQuery {
   stage?: string;
   payment?: string;
   path?: string;
+  tag?: string;
   page: number;
   pageSize: number;
 }
@@ -32,6 +33,7 @@ export interface AdminUsersPage<T> {
   availableStages: string[];
   availablePayments: string[];
   availablePaths: string[];
+  availableTags: string[];
 }
 
 export function filterAdminUsers<T extends AdminUserLike>(
@@ -42,6 +44,7 @@ export function filterAdminUsers<T extends AdminUserLike>(
   const stage = query.stage?.trim() ?? "";
   const payment = query.payment?.trim() ?? "";
   const path = query.path?.trim() ?? "";
+  const tag = query.tag?.trim() ?? "";
   const page = clampPositiveInt(query.page, 1);
   const pageSize = clampPositiveInt(query.pageSize, 20);
 
@@ -72,6 +75,9 @@ export function filterAdminUsers<T extends AdminUserLike>(
     if (path && summary.recommendedPath !== path) {
       return false;
     }
+    if (tag && !summary.segmentTagLabels.includes(tag)) {
+      return false;
+    }
 
     return true;
   });
@@ -90,6 +96,9 @@ export function filterAdminUsers<T extends AdminUserLike>(
   const availablePaths = Array.from(new Set(users
     .map((user) => deriveServerOrderflowSummary(user.scores).recommendedPath)
     .filter(Boolean)));
+  const availableTags = Array.from(new Set(users
+    .flatMap((user) => deriveServerOrderflowSummary(user.scores).segmentTagLabels)
+    .filter(Boolean)));
 
   return {
     items,
@@ -100,6 +109,7 @@ export function filterAdminUsers<T extends AdminUserLike>(
     availableStages,
     availablePayments,
     availablePaths,
+    availableTags,
   };
 }
 

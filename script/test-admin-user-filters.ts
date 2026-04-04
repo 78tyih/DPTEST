@@ -60,6 +60,10 @@ const byPath = filterAdminUsers(users, { path: "课程训练系统", page: 1, pa
 assert.equal(byPath.total, 1);
 assert.equal(byPath.items[0]?.id, 1);
 
+const byTag = filterAdminUsers(users, { tag: "课程高意向", page: 1, pageSize: 20 });
+assert.equal(byTag.total, 1);
+assert.equal(byTag.items[0]?.id, 1);
+
 const paged = filterAdminUsers(users, { page: 2, pageSize: 1 });
 assert.equal(paged.total, 3);
 assert.equal(paged.totalPages, 3);
@@ -69,5 +73,7 @@ assert.equal(paged.availableStages.includes("交易大师型"), true);
 assert.equal(paged.availableStages.includes("订单流小白"), true);
 assert.equal(paged.availablePayments.includes("高付费意向"), true);
 assert.equal(paged.availablePayments.includes("免费资料意向"), true);
+assert.equal(paged.availableTags.includes("课程高意向"), true);
+assert.equal(paged.availableTags.includes("免费资料型"), true);
 
 console.log("test-admin-user-filters: ok");

@@ -6,6 +6,11 @@ import { dimensionLabels, type Dimension } from "@/data/questions";
 import { diagnosticDimensionLabels, type DiagnosticDimension } from "@/data/orderflowDiagnostic";
 import { useToast } from "@/hooks/use-toast";
 import { deriveAdminOrderflowSummary } from "@/utils/orderflowAdmin";
+import {
+  adminSalesPoolPresets,
+  buildAdminSalesPoolQueryPatch,
+  isAdminSalesPoolActive,
+} from "@/utils/adminSalesPools";
 
 interface SalesContact {
   id: number;
@@ -112,6 +117,7 @@ interface AdminUsersResponse {
   availableStages: string[];
   availablePayments: string[];
   availablePaths: string[];
+  availableTags: string[];
 }
 
 const TRADER_TYPE_NAMES: Record<string, string> = {
@@ -970,6 +976,7 @@ function UsersPanel({
   totalPages,
   availableStages,
   availablePayments,
+  availableTags,
   query,
   onQueryChange,
 }: {
@@ -981,8 +988,9 @@ function UsersPanel({
   totalPages: number;
   availableStages: string[];
   availablePayments: string[];
-  query: { search: string; stage: string; payment: string; path: string };
-  onQueryChange: (patch: Partial<{ search: string; stage: string; payment: string; path: string; page: number }>) => void;
+  availableTags: string[];
+  query: { search: string; stage: string; payment: string; path: string; tag: string };
+  onQueryChange: (patch: Partial<{ search: string; stage: string; payment: string; path: string; tag: string; page: number }>) => void;
 }) {
   const { toast } = useToast();
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -1093,8 +1101,30 @@ function UsersPanel({
 
   return (
     <div className="space-y-3" data-testid="users-panel">
-      <div className="flex items-center gap-2">
-        <div className="flex-1 relative">
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {adminSalesPoolPresets.map((preset) => {
+          const active = isAdminSalesPoolActive(preset.key, query);
+          return (
+            <button
+              key={preset.key}
+              onClick={() => onQueryChange(buildAdminSalesPoolQueryPatch(preset.key))}
+              className="px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-colors"
+              style={{
+                background: active ? 'rgba(var(--gold-rgb), 0.14)' : 'rgba(255,255,255,0.03)',
+                color: active ? 'var(--gold)' : 'var(--text-muted)',
+                border: `1px solid ${active ? 'rgba(var(--gold-rgb), 0.3)' : 'var(--border)'}`,
+              }}
+              title={preset.description}
+              data-testid={`button-sales-pool-${preset.key}`}
+            >
+              {preset.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="basis-full relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
           <input
             type="text"
@@ -1128,6 +1158,17 @@ function UsersPanel({
             <option key={option} value={option}>{option}</option>
           ))}
         </select>
+        <select
+          value={query.tag}
+          onChange={(e) => onQueryChange({ tag: e.target.value, page: 1 })}
+          className="px-3 py-2 rounded-xl text-xs outline-none"
+          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: 'var(--text-strong)' }}
+        >
+          <option value="all">全部标签</option>
+          {availableTags.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
         <button
           onClick={exportCSV}
           className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-medium shrink-0"
@@ -1140,7 +1181,7 @@ function UsersPanel({
       </div>
 
       <div className="text-xs flex items-center justify-between" style={{ color: 'var(--text-muted)' }}>
-        <span>共 {total} 位客户{(query.search || query.stage !== "all" || query.payment !== "all") && ` · 当前第 ${page}/${totalPages} 页`}</span>
+        <span>共 {total} 位客户{(query.search || query.stage !== "all" || query.payment !== "all" || query.path !== "all" || query.tag !== "all") && ` · 当前第 ${page}/${totalPages} 页`}</span>
         <button onClick={onRefresh} disabled={loading} className="flex items-center gap-1" data-testid="button-refresh-users">
           <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
           刷新
@@ -1753,12 +1794,14 @@ export default function AdminPage() {
   const [adminUsersTotalPages, setAdminUsersTotalPages] = useState(1);
   const [adminAvailableStages, setAdminAvailableStages] = useState<string[]>([]);
   const [adminAvailablePayments, setAdminAvailablePayments] = useState<string[]>([]);
+  const [adminAvailableTags, setAdminAvailableTags] = useState<string[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [userQuery, setUserQuery] = useState({
     search: "",
     stage: "all",
     payment: "all",
     path: "all",
+    tag: "all",
     page: 1,
     pageSize: 20,
   });
@@ -1805,6 +1848,7 @@ export default function AdminPage() {
       if (userQuery.stage !== "all") params.set("stage", userQuery.stage);
       if (userQuery.payment !== "all") params.set("payment", userQuery.payment);
       if (userQuery.path !== "all") params.set("path", userQuery.path);
+      if (userQuery.tag !== "all") params.set("tag", userQuery.tag);
       params.set("page", String(userQuery.page));
       params.set("pageSize", String(userQuery.pageSize));
       const res = await fetch(`/api/admin/users?${params.toString()}`, { credentials: "include" });
@@ -1816,6 +1860,7 @@ export default function AdminPage() {
         setAdminUsersTotalPages(data.totalPages);
         setAdminAvailableStages(data.availableStages);
         setAdminAvailablePayments(data.availablePayments);
+        setAdminAvailableTags(data.availableTags);
       }
     } catch {}
     setUsersLoading(false);
@@ -1996,6 +2041,7 @@ export default function AdminPage() {
             totalPages={adminUsersTotalPages}
             availableStages={adminAvailableStages}
             availablePayments={adminAvailablePayments}
+            availableTags={adminAvailableTags}
             query={userQuery}
             onQueryChange={handleUserQueryChange}
           />

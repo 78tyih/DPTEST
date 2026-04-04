@@ -836,6 +836,7 @@ export async function registerRoutes(
         stage: typeof req.query.stage === "string" ? req.query.stage : "",
         payment: typeof req.query.payment === "string" ? req.query.payment : "",
         path: typeof req.query.path === "string" ? req.query.path : "",
+        tag: typeof req.query.tag === "string" ? req.query.tag : "",
         page,
         pageSize,
       });
