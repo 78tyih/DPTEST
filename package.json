@@ -12,6 +12,7 @@
     "test:orderflow-admin": "tsx script/test-orderflow-admin.ts",
     "test:admin-user-filters": "tsx script/test-admin-user-filters.ts",
     "test:admin-sales-pools": "tsx script/test-admin-sales-pools.ts",
+    "test:admin-sales-pool-stats": "tsx script/test-admin-sales-pool-stats.ts",
     "test:orderflow-logic-map": "tsx script/test-orderflow-logic-map.ts",
     "test:orderflow-sales-playbook": "tsx script/test-orderflow-sales-playbook.ts",
     "test:orderflow-storage": "tsx script/test-orderflow-storage.ts",

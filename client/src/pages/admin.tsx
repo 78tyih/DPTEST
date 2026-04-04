@@ -120,6 +120,33 @@ interface AdminUsersResponse {
   availableTags: string[];
 }
 
+interface AdminSalesPoolCard {
+  key: string;
+  label: string;
+  description: string;
+  total: number;
+  todayNew: number;
+  pendingFollowUp: number;
+}
+
+interface AdminSalesPoolPendingUser {
+  id: number;
+  phone: string;
+  nickname: string | null;
+  traderStageLabel: string;
+  paymentIntentLabel: string;
+  recommendedPath: string;
+  poolLabels: string[];
+  quizCompletedAt: string | null;
+  createdAt: string | null;
+  followStatus: string;
+}
+
+interface AdminSalesPoolStatsResponse {
+  cards: AdminSalesPoolCard[];
+  pendingUsers: AdminSalesPoolPendingUser[];
+}
+
 const TRADER_TYPE_NAMES: Record<string, string> = {
   RS: "风险猎手", RM: "稳健策略师", RT: "技术分析师", RI: "直觉交易者",
   AS: "激进狙击手", AM: "平衡操盘手", AT: "量化分析师", AI: "灵感交易者",
@@ -1343,10 +1370,141 @@ function UsersPanel({
             onClose={() => setSelectedUser(null)}
             onTagsUpdate={(userId, tags) => {
               setSelectedUser(prev => prev && prev.id === userId ? { ...prev, tags } : prev);
+              onRefresh();
             }}
           />
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function SalesPoolSummaryPanel({
+  stats,
+  loading,
+  query,
+  onSelectPool,
+  onRefresh,
+}: {
+  stats: AdminSalesPoolStatsResponse | null;
+  loading: boolean;
+  query: { search: string; stage: string; payment: string; path: string; tag: string };
+  onSelectPool: (key: string) => void;
+  onRefresh: () => void;
+}) {
+  const formatDate = (value: string | null) => {
+    if (!value) return "-";
+    return new Date(value).toLocaleDateString("zh-CN", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  return (
+    <div className="space-y-3 mb-4">
+      <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>销售池总览</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>只统计已完成订单流诊断的客户，卡片可直接跳转筛选。</p>
+          </div>
+          <button onClick={onRefresh} disabled={loading} className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+            刷新
+          </button>
+        </div>
+
+        {loading && !stats ? (
+          <div className="text-center py-8">
+            <div className="w-6 h-6 mx-auto rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
+          </div>
+        ) : stats ? (
+          <div className="grid grid-cols-2 gap-2">
+            {stats.cards.map((card) => {
+              const active = isAdminSalesPoolActive(card.key, query);
+              return (
+                <button
+                  key={card.key}
+                  onClick={() => onSelectPool(card.key)}
+                  className="text-left rounded-xl p-3 transition-colors"
+                  style={{
+                    background: active ? 'rgba(var(--gold-rgb), 0.12)' : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${active ? 'rgba(var(--gold-rgb), 0.28)' : 'var(--border)'}`,
+                  }}
+                  data-testid={`card-sales-pool-${card.key}`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium" style={{ color: active ? 'var(--gold)' : 'var(--text-strong)' }}>{card.label}</span>
+                    <span className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>{card.total}</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed mb-2" style={{ color: 'var(--text-muted)' }}>{card.description}</p>
+                  <div className="flex items-center gap-3 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                    <span>今日新增 {card.todayNew}</span>
+                    <span>待跟进 {card.pendingFollowUp}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-6">
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>暂无销售池统计</p>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-2 mb-3">
+          <Clock className="w-4 h-4" style={{ color: 'var(--primary)' }} />
+          <div>
+            <p className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>待跟进客户</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>默认展示最近待跟进的 8 位客户，便于销售优先处理。</p>
+          </div>
+        </div>
+
+        {!stats || stats.pendingUsers.length === 0 ? (
+          <div className="text-center py-4">
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>当前没有待跟进客户</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {stats.pendingUsers.map((user) => (
+              <div
+                key={user.id}
+                className="rounded-xl p-3"
+                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}
+                data-testid={`pending-user-${user.id}`}
+              >
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>{user.nickname || user.phone}</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                      测评 {formatDate(user.quizCompletedAt || user.createdAt)}
+                    </p>
+                  </div>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(59,130,246,0.18)', color: '#60A5FA' }}>
+                    待跟进
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {user.poolLabels.map((label) => (
+                    <span key={label} className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(var(--gold-rgb), 0.12)', color: 'var(--gold)' }}>
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                <div className="text-[11px] flex flex-wrap gap-3" style={{ color: 'var(--text-muted)' }}>
+                  {user.traderStageLabel && <span>{user.traderStageLabel}</span>}
+                  {user.paymentIntentLabel && <span>{user.paymentIntentLabel}</span>}
+                  {user.recommendedPath && <span>{user.recommendedPath}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1795,6 +1953,8 @@ export default function AdminPage() {
   const [adminAvailableStages, setAdminAvailableStages] = useState<string[]>([]);
   const [adminAvailablePayments, setAdminAvailablePayments] = useState<string[]>([]);
   const [adminAvailableTags, setAdminAvailableTags] = useState<string[]>([]);
+  const [salesPoolStats, setSalesPoolStats] = useState<AdminSalesPoolStatsResponse | null>(null);
+  const [salesPoolsLoading, setSalesPoolsLoading] = useState(false);
   const [usersLoading, setUsersLoading] = useState(false);
   const [userQuery, setUserQuery] = useState({
     search: "",
@@ -1866,6 +2026,23 @@ export default function AdminPage() {
     setUsersLoading(false);
   }, [userQuery]);
 
+  const fetchSalesPoolStats = useCallback(async () => {
+    setSalesPoolsLoading(true);
+    try {
+      const res = await fetch("/api/admin/users/pools", { credentials: "include" });
+      if (res.ok) {
+        const data: AdminSalesPoolStatsResponse = await res.json();
+        setSalesPoolStats(data);
+      }
+    } catch {}
+    setSalesPoolsLoading(false);
+  }, []);
+
+  const refreshUsersTab = useCallback(() => {
+    fetchUsers();
+    fetchSalesPoolStats();
+  }, [fetchUsers, fetchSalesPoolStats]);
+
   const handleUserQueryChange = useCallback((patch: Partial<typeof userQuery>) => {
     setUserQuery((prev) => ({ ...prev, ...patch }));
   }, []);
@@ -1883,9 +2060,9 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (isAdmin && tab === "users") {
-      fetchUsers();
+      refreshUsersTab();
     }
-  }, [isAdmin, tab, fetchUsers]);
+  }, [isAdmin, tab, refreshUsersTab]);
 
   const handleCheckAll = useCallback(async () => {
     setCheckingAll(true);
@@ -1953,7 +2130,7 @@ export default function AdminPage() {
             顾问管理
           </button>
           <button
-            onClick={() => { setTab("users"); if (adminUsers.length === 0) fetchUsers(); }}
+            onClick={() => { setTab("users"); if (adminUsers.length === 0 || !salesPoolStats) refreshUsersTab(); }}
             className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-medium transition-colors whitespace-nowrap"
             style={{
               background: tab === "users" ? 'rgba(var(--gold-rgb), 0.15)' : 'rgba(255,255,255,0.03)',
@@ -2032,19 +2209,28 @@ export default function AdminPage() {
         )}
 
         {tab === "users" && (
-          <UsersPanel
-            users={adminUsers}
-            loading={usersLoading}
-            onRefresh={fetchUsers}
-            total={adminUsersTotal}
-            page={adminUsersPage}
-            totalPages={adminUsersTotalPages}
-            availableStages={adminAvailableStages}
-            availablePayments={adminAvailablePayments}
-            availableTags={adminAvailableTags}
-            query={userQuery}
-            onQueryChange={handleUserQueryChange}
-          />
+          <>
+            <SalesPoolSummaryPanel
+              stats={salesPoolStats}
+              loading={salesPoolsLoading}
+              query={userQuery}
+              onSelectPool={(key) => handleUserQueryChange(buildAdminSalesPoolQueryPatch(key))}
+              onRefresh={refreshUsersTab}
+            />
+            <UsersPanel
+              users={adminUsers}
+              loading={usersLoading}
+              onRefresh={refreshUsersTab}
+              total={adminUsersTotal}
+              page={adminUsersPage}
+              totalPages={adminUsersTotalPages}
+              availableStages={adminAvailableStages}
+              availablePayments={adminAvailablePayments}
+              availableTags={adminAvailableTags}
+              query={userQuery}
+              onQueryChange={handleUserQueryChange}
+            />
+          </>
         )}
 
         {tab === "stats" && (

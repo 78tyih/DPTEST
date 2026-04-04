@@ -10,6 +10,7 @@ import { sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { getAdminStats, getExternalStats } from "./stats";
 import { filterAdminUsers } from "./adminUsers";
+import { buildAdminSalesPoolStats } from "./adminSalesPoolStats";
 
 let salesCounter = 0;
 
@@ -149,6 +150,52 @@ export async function registerRoutes(
       },
     })
   );
+
+  async function loadAdminUsersSnapshot() {
+    const result = await db.execute(sql`
+      SELECT
+        u.id,
+        u.phone,
+        u.nickname,
+        u.wechat_id,
+        u.source,
+        u.tags,
+        u.tier,
+        u.login_days,
+        u.last_login_date,
+        u.last_active_at,
+        u.created_at,
+        q.trader_type_code,
+        q.avg_score,
+        q.rank_name,
+        q.scores,
+        q.created_at AS quiz_completed_at
+      FROM users u
+      LEFT JOIN LATERAL (
+        SELECT * FROM quiz_results WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1
+      ) q ON true
+      ORDER BY u.created_at DESC
+    `);
+
+    return (result.rows || result || []) as Array<{
+      id: number;
+      phone: string;
+      nickname: string | null;
+      wechat_id: string | null;
+      source: string | null;
+      tags: unknown;
+      tier: number;
+      login_days: number;
+      last_login_date: string | null;
+      last_active_at: string | null;
+      created_at: string | null;
+      trader_type_code: string | null;
+      avg_score: number | null;
+      rank_name: string | null;
+      scores: unknown;
+      quiz_completed_at: string | null;
+    }>;
+  }
 
   app.post("/api/register", async (req, res) => {
     try {
@@ -795,40 +842,19 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/admin/users/pools", requireAdmin, async (_req, res) => {
+    try {
+      const rawRows = await loadAdminUsersSnapshot();
+      res.json(buildAdminSalesPoolStats(rawRows));
+    } catch (err) {
+      console.error("[admin] sales pools error:", err);
+      res.status(500).json({ message: "获取销售池统计失败" });
+    }
+  });
+
   app.get("/api/admin/users", requireAdmin, async (req, res) => {
     try {
-      const result = await db.execute(sql`
-        SELECT
-          u.id,
-          u.phone,
-          u.nickname,
-          u.wechat_id,
-          u.source,
-          u.tags,
-          u.tier,
-          u.login_days,
-          u.last_login_date,
-          u.last_active_at,
-          u.created_at,
-          q.trader_type_code,
-          q.avg_score,
-          q.rank_name,
-          q.scores,
-          q.created_at AS quiz_completed_at
-        FROM users u
-        LEFT JOIN LATERAL (
-          SELECT * FROM quiz_results WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1
-        ) q ON true
-        ORDER BY u.created_at DESC
-      `);
-      const rawRows = (result.rows || result || []) as Array<{
-        id: number;
-        phone: string;
-        nickname: string | null;
-        wechat_id: string | null;
-        trader_type_code: string | null;
-        scores: unknown;
-      }>;
+      const rawRows = await loadAdminUsersSnapshot();
       const page = Number.parseInt(String(req.query.page ?? "1"), 10);
       const pageSize = Number.parseInt(String(req.query.pageSize ?? "20"), 10);
       const filtered = filterAdminUsers(rawRows, {
