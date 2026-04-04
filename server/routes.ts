@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertUserSchema, loginSchema, insertEventSchema, insertSalesContactSchema } from "@shared/schema";
+import { buildWechatContactPayload, DEFAULT_WECHAT_CONTACT, DEFAULT_WECHAT_CONTACT_URL } from "@shared/wechatContact";
 import { sendRegistrationNotification, sendResultNotification, sendContactAlertNotification } from "./webhook";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -63,7 +64,7 @@ async function checkContactAlive(url: string, skipCache = false): Promise<boolea
 async function getAliveContacts(): Promise<{ contacts: { name: string; url: string }[]; allDead: boolean }> {
   const allContacts = await storage.getEnabledSalesContacts();
   if (allContacts.length === 0) {
-    return { contacts: [{ name: "Deven", url: "https://work.weixin.qq.com/ca/cawcde66939ac2ab81" }], allDead: true };
+    return { contacts: [{ ...DEFAULT_WECHAT_CONTACT }], allDead: true };
   }
   const results = await Promise.all(
     allContacts.map(async (c) => ({
@@ -111,8 +112,8 @@ async function runHealthMonitor() {
 }
 
 const DEFAULT_CONTACTS = [
-  { name: "默认顾问", url: "https://work.weixin.qq.com/ca/cawcde75d99eb3fce4" },
-  { name: "Deven", url: "https://work.weixin.qq.com/ca/cawcde66939ac2ab81" },
+  { name: "默认顾问", url: DEFAULT_WECHAT_CONTACT_URL },
+  { name: "Deven", url: DEFAULT_WECHAT_CONTACT_URL },
   { name: "Anna", url: "https://work.weixin.qq.com/ca/cawcde2d7a8f8a7ac3" },
 ];
 
@@ -667,13 +668,12 @@ export async function registerRoutes(
     }
   });
 
-  // 企业微信跳转已暂停 —— 多个企业微信因跳转被封号
   app.get("/api/wechat-contact", async (_req, res) => {
-    res.json({ disabled: true, message: "企业微信顾问服务暂停中" });
+    res.json(buildWechatContactPayload());
   });
 
   app.post("/api/wechat-contact/switch", async (_req, res) => {
-    res.json({ disabled: true, message: "企业微信顾问服务暂停中" });
+    res.json(buildWechatContactPayload());
   });
 
   // ===== 客服 Agent 独立登录系统 =====

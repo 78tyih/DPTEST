@@ -15,6 +15,7 @@
     "test:admin-sales-pool-stats": "tsx script/test-admin-sales-pool-stats.ts",
     "test:webhook-sales-pool-snapshot": "tsx script/test-webhook-sales-pool-snapshot.ts",
     "test:diagnostic-links": "tsx script/test-diagnostic-links.ts",
+    "test:wechat-contact-config": "tsx script/test-wechat-contact-config.ts",
     "test:orderflow-logic-map": "tsx script/test-orderflow-logic-map.ts",
     "test:orderflow-sales-playbook": "tsx script/test-orderflow-sales-playbook.ts",
     "test:orderflow-storage": "tsx script/test-orderflow-storage.ts",
