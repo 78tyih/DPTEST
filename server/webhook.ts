@@ -117,6 +117,14 @@ interface OrderflowResultWebhookPayload {
   }>;
   recommendedAction: string;
   recommendedPath: string;
+  userSummary: string;
+  salesSummary: {
+    priorityLabel: string;
+    fitConclusion: string;
+    conversationHook: string;
+    riskAlert: string;
+    nextStep: string;
+  };
   reportUrl?: string;
   verifyCode?: string;
 }
@@ -234,14 +242,27 @@ async function sendOrderflowDiagnosticNotification(payload: OrderflowResultWebho
     `### 🧭 诊断结果`,
     `**测评轨道：** ${trackLabel}`,
     `**结果分层：** <font color="info">${payload.scoreBand.title}</font>`,
+    `**跟进优先级：** <font color="warning">${payload.salesSummary.priorityLabel}</font>`,
     `**推荐路径：** ${payload.recommendedPath}`,
     `**建议动作：** ${payload.recommendedAction}`,
+    ``,
+    `### 🧠 当前判断`,
+    `${payload.userSummary}`,
     ``,
     `### 🕸️ 六维得分`,
     scoreLines,
     ``,
     `### 🏷️ 销售标签`,
     segmentLines,
+    ``,
+    `### ☎️ 销售摘要`,
+    `**匹配结论：** ${payload.salesSummary.fitConclusion}`,
+    ``,
+    `**开场切入：** ${payload.salesSummary.conversationHook}`,
+    ``,
+    `**风险提醒：** ${payload.salesSummary.riskAlert}`,
+    ``,
+    `**建议下一步：** ${payload.salesSummary.nextStep}`,
     ``,
     `### 🎁 已解锁资料`,
     rewardLines,

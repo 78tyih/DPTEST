@@ -139,58 +139,58 @@ export const scoreBands: ScoreBand[] = [
   {
     id: "starter-foundation",
     track: "starter",
-    title: "订单流认知待启动",
+    title: "先建立订单流基础认知",
     min: 0,
     max: 39,
-    summary: "先建立基础认知，再决定是否继续深入。",
+    summary: "你更适合先建立基础认知和正确预期，再决定是否继续深入。",
   },
   {
     id: "starter-ready",
     track: "starter",
-    title: "具备基础认知",
+    title: "具备继续深测的基础",
     min: 40,
     max: 69,
-    summary: "适合进入深测，继续看适配度报告。",
+    summary: "你已经不是纯小白，适合继续做深测看真实适配度和承接路径。",
   },
   {
     id: "starter-upgrade",
     track: "starter",
-    title: "具备升级潜力",
+    title: "建议直接进入深度诊断",
     min: 70,
     max: 100,
-    summary: "可以直接进入深测，承接到更完整的训练路径。",
+    summary: "你的基础认知和服务意向已经出现，适合直接进入深度诊断。",
   },
   {
     id: "deep-observe",
     track: "deep",
-    title: "先做认知与训练打底",
+    title: "先补认知与训练底盘",
     min: 0,
     max: 44,
-    summary: "先通过资料、直播和基础训练建立稳定认知。",
+    summary: "当前更适合先做认知、风控和训练打底，不建议急着追求结果。",
   },
   {
     id: "deep-build",
     track: "deep",
-    title: "适合进入系统训练",
+    title: "适合进入系统训练期",
     min: 45,
     max: 64,
-    summary: "适合以课程和训练营方式继续推进。",
+    summary: "已经具备一定基础，适合通过系统课程和训练反馈继续推进。",
   },
   {
     id: "deep-convert",
     track: "deep",
-    title: "高匹配高意向",
+    title: "高匹配，可进入承接",
     min: 65,
     max: 84,
-    summary: "建议优先承接到课程、软件或考试盘路径。",
+    summary: "匹配度和意向都较明确，适合承接到课程、软件或考试盘路径。",
   },
   {
     id: "deep-priority",
     track: "deep",
-    title: "优先跟进客户",
+    title: "高优先级客户",
     min: 85,
     max: 100,
-    summary: "应尽快同步销售进行高优先级跟进。",
+    summary: "建议尽快同步销售高优先级跟进，不要只放进普通培育池。",
   },
 ];
 
@@ -238,7 +238,7 @@ export const diagnosticQuestions: Record<DiagnosticTrackId, DiagnosticQuestion[]
     {
       id: "starter-market",
       track: "starter",
-      text: "你当前主要交易哪个市场？",
+      text: "你现在主要在什么市场做交易？",
       options: [
         {
           text: "内盘期货",
@@ -300,7 +300,7 @@ export const diagnosticQuestions: Record<DiagnosticTrackId, DiagnosticQuestion[]
     {
       id: "starter-live",
       track: "starter",
-      text: "你有没有看过德湃的直播或公开内容？",
+      text: "你对德湃公开内容的熟悉度更接近哪种状态？",
       options: [
         {
           text: "没看过",
@@ -331,7 +331,7 @@ export const diagnosticQuestions: Record<DiagnosticTrackId, DiagnosticQuestion[]
     {
       id: "starter-knowledge",
       track: "starter",
-      text: "你觉得订单流更接近下面哪一种？",
+      text: "你理解中的订单流，更接近下面哪一种？",
       options: [
         {
           text: "观察挂单、成交、撤单背后的资金行为",
@@ -393,7 +393,7 @@ export const diagnosticQuestions: Record<DiagnosticTrackId, DiagnosticQuestion[]
     {
       id: "starter-offer",
       track: "starter",
-      text: "你更希望先拿到哪种帮助？",
+      text: "如果先给你一个入口，你更希望从哪一步开始？",
       options: [
         {
           text: "先看免费资料和学习笔记",
@@ -457,7 +457,7 @@ export const diagnosticQuestions: Record<DiagnosticTrackId, DiagnosticQuestion[]
     {
       id: "deep-awareness",
       track: "deep",
-      text: "订单流能不能单独保证你稳定盈利？",
+      text: "你现在怎么看订单流和稳定盈利之间的关系？",
       options: [
         {
           text: "不能，必须配合风控、资金管理和训练",
@@ -705,7 +705,7 @@ export const diagnosticQuestions: Record<DiagnosticTrackId, DiagnosticQuestion[]
     {
       id: "deep-goal",
       track: "deep",
-      text: "你现在最希望通过德湃获得什么？",
+      text: "如果德湃现在先帮你补一块，你最想先补哪一块？",
       options: [
         {
           text: "系统课程和训练反馈",
@@ -798,7 +798,7 @@ export const diagnosticQuestions: Record<DiagnosticTrackId, DiagnosticQuestion[]
     {
       id: "deep-conversion",
       track: "deep",
-      text: "如果这套路径和你匹配，你更愿意怎么推进？",
+      text: "如果这套路径和你匹配，你更希望先从哪一步开始？",
       options: [
         {
           text: "先约 1 次诊断沟通，再决定课程或软件",

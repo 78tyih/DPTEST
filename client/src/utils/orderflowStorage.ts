@@ -17,6 +17,9 @@ export interface StoredOrderflowScores {
   recommendedAction: string;
   recommendedPath: string;
   topDimensions: DiagnosticDimension[];
+  bottomDimensions: DiagnosticDimension[];
+  userSummary: string;
+  salesSummary: OrderflowDiagnosticResult["salesSummary"];
 }
 
 export interface OrderflowStoredRecordLike {
@@ -47,6 +50,9 @@ export function buildOrderflowQuizSubmission(
       recommendedAction: result.recommendedAction,
       recommendedPath: result.recommendedPath,
       topDimensions: result.topDimensions,
+      bottomDimensions: result.bottomDimensions,
+      userSummary: result.userSummary,
+      salesSummary: result.salesSummary,
     },
   };
 }
@@ -74,6 +80,12 @@ export function reconstructOrderflowResultFromStoredRecord(
         .sort((a, b) => b[1] - a[1])
         .slice(0, 2)
         .map(([dimension]) => dimension as DiagnosticDimension);
+  const bottomDimensions = stored.bottomDimensions?.length
+    ? stored.bottomDimensions
+    : Object.entries(stored.dimensions)
+        .sort((a, b) => a[1] - b[1])
+        .slice(0, 2)
+        .map(([dimension]) => dimension as DiagnosticDimension);
 
   return {
     kind: "orderflow",
@@ -84,10 +96,19 @@ export function reconstructOrderflowResultFromStoredRecord(
     avgScore: record.avgScore,
     scoreBand: stored.scoreBand,
     topDimensions,
+    bottomDimensions,
     segmentTags: stored.segmentTags ?? [],
     segmentSignalScores: {},
     unlockRewards: stored.unlockRewards ?? [],
     recommendedAction: stored.recommendedAction,
     recommendedPath: stored.recommendedPath,
+    userSummary: stored.userSummary ?? stored.scoreBand.summary,
+    salesSummary: stored.salesSummary ?? {
+      priorityLabel: "持续培育",
+      fitConclusion: stored.scoreBand.summary,
+      conversationHook: stored.recommendedAction,
+      riskAlert: "历史记录缺少销售摘要，请以当前报告为准。",
+      nextStep: stored.recommendedAction,
+    },
   };
 }

@@ -116,6 +116,39 @@ export default function OrderflowDiagnosticView({
           className="rounded-2xl p-6"
           style={{ background: "var(--bg-1)", border: "1px solid var(--border)" }}
         >
+          <h2 className="text-lg font-bold mb-3" style={{ color: "var(--text-strong)" }}>
+            当前判断
+          </h2>
+          <div className="rounded-xl px-4 py-3 mb-4" style={{ background: "rgba(var(--primary-rgb), 0.08)" }}>
+            <p className="text-sm leading-relaxed" style={{ color: "var(--text-strong)" }}>
+              {result.userSummary}
+            </p>
+          </div>
+          <div className="grid md:grid-cols-2 gap-3 mb-4">
+            <div
+              className="rounded-xl px-4 py-3"
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                当前强项
+              </p>
+              <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>
+                {result.topDimensions.map((dimension) => diagnosticDimensionLabels[dimension]).join("、")}
+              </p>
+            </div>
+            <div
+              className="rounded-xl px-4 py-3"
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                优先补强
+              </p>
+              <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>
+                {result.bottomDimensions.map((dimension) => diagnosticDimensionLabels[dimension]).join("、")}
+              </p>
+            </div>
+          </div>
+
           <h2 className="text-lg font-bold mb-4" style={{ color: "var(--text-strong)" }}>
             六维诊断
           </h2>

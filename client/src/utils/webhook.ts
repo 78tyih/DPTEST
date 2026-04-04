@@ -34,6 +34,8 @@ export interface OrderflowResultWebhookParams {
   unlockRewards: RewardAsset[];
   recommendedAction: string;
   recommendedPath: string;
+  userSummary: string;
+  salesSummary: OrderflowDiagnosticResult["salesSummary"];
   verifyCode?: string;
 }
 
@@ -112,6 +114,8 @@ export function buildOrderflowResultWebhookPayload({
     unlockRewards: result.unlockRewards,
     recommendedAction: result.recommendedAction,
     recommendedPath: result.recommendedPath,
+    userSummary: result.userSummary,
+    salesSummary: result.salesSummary,
     verifyCode,
   };
 }

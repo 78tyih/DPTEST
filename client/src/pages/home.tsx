@@ -600,6 +600,8 @@ function OrderflowHomeSummary({
         </div>
 
         <div className="rounded-xl px-4 py-3 mb-4" style={{ background: 'rgba(var(--primary-rgb), 0.08)' }}>
+          <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>当前判断</p>
+          <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--text-strong)' }}>{result.userSummary}</p>
           <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>推荐路径</p>
           <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{result.recommendedPath}</p>
           <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--text-muted)' }}>{result.recommendedAction}</p>

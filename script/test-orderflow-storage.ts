@@ -14,6 +14,8 @@ assert.equal(submission.scores.mode, "orderflow-diagnostic");
 assert.equal(submission.scores.trackId, "deep");
 assert.equal(submission.scores.segmentTags.length > 0, true);
 assert.equal(submission.scores.unlockRewards.length >= 4, true);
+assert.equal(submission.scores.userSummary.length > 0, true);
+assert.equal(submission.scores.salesSummary.priorityLabel.length > 0, true);
 
 const reconstructed = reconstructOrderflowResultFromStoredRecord({
   scores: submission.scores,
@@ -26,5 +28,7 @@ assert.notEqual(reconstructed, null);
 assert.equal(reconstructed?.trackId, "deep");
 assert.equal(reconstructed?.scoreBand.title, result.scoreBand.title);
 assert.equal(reconstructed?.recommendedPath.length > 0, true);
+assert.equal(reconstructed?.userSummary, result.userSummary);
+assert.equal(reconstructed?.salesSummary.priorityLabel, result.salesSummary.priorityLabel);
 
 console.log("test-orderflow-storage: ok");

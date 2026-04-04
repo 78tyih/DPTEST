@@ -12,6 +12,9 @@ assert.equal(starterResult.trackId, "starter");
 assert.equal(starterResult.unlockRewards.length >= 3, true);
 assert.equal(starterResult.scoreBand.track, "starter");
 assert.equal(starterResult.recommendedAction.length > 0, true);
+assert.equal(starterResult.userSummary.includes("订单流"), true);
+assert.equal(starterResult.salesSummary.priorityLabel.length > 0, true);
+assert.equal(starterResult.salesSummary.conversationHook.length > 0, true);
 
 const deepAnswers = new Array(getQuestionSetByTrack("deep").length).fill(0);
 const deepResult = calculateOrderflowDiagnosticResult("deep", deepAnswers);
@@ -21,6 +24,9 @@ assert.equal(deepResult.unlockRewards.length >= 4, true);
 assert.equal(deepResult.scoreBand.track, "deep");
 assert.equal(deepResult.segmentTags.length > 0, true);
 assert.equal(deepResult.recommendedPath.length > 0, true);
+assert.equal(deepResult.bottomDimensions.length, 2);
+assert.equal(deepResult.salesSummary.fitConclusion.length > 0, true);
+assert.equal(deepResult.salesSummary.nextStep.length > 0, true);
 
 const payload = buildOrderflowResultWebhookPayload({
   phone: "13800000000",
@@ -35,5 +41,8 @@ assert.equal(payload.dimensionScores["commercial-intent"] >= 0, true);
 assert.equal(payload.segmentTags.length > 0, true);
 assert.equal(payload.unlockRewards.length >= 4, true);
 assert.equal(payload.recommendedAction.length > 0, true);
+assert.equal(payload.userSummary, deepResult.userSummary);
+assert.equal(payload.salesSummary.priorityLabel, deepResult.salesSummary.priorityLabel);
+assert.equal(payload.salesSummary.riskAlert.length > 0, true);
 
 console.log("test-orderflow-diagnostic: ok");

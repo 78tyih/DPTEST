@@ -557,7 +557,19 @@ export async function registerRoutes(
         const { wechatName, scores, traderType, rank, avgScore, salesStrategy, verifyCode } = req.body;
         sendResultNotification({ phone, wechatName, scores, traderType, rank, avgScore, salesStrategy, reportUrl, verifyCode });
       } else {
-        const { wechatName, selectedTrack, scoreBand, dimensionScores, segmentTags, unlockRewards, recommendedAction, recommendedPath, verifyCode } = req.body;
+        const {
+          wechatName,
+          selectedTrack,
+          scoreBand,
+          dimensionScores,
+          segmentTags,
+          unlockRewards,
+          recommendedAction,
+          recommendedPath,
+          userSummary,
+          salesSummary,
+          verifyCode,
+        } = req.body;
         sendResultNotification({
           phone,
           wechatName,
@@ -568,6 +580,8 @@ export async function registerRoutes(
           unlockRewards,
           recommendedAction,
           recommendedPath,
+          userSummary,
+          salesSummary,
           reportUrl,
           verifyCode,
         });
