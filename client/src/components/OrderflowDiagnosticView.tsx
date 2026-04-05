@@ -239,46 +239,48 @@ export default function OrderflowDiagnosticView({
           </div>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ ...ease, delay: 0.18 }}
-          className="rounded-2xl p-6"
-          style={{ background: "var(--bg-1)", border: "1px solid var(--border)" }}
-        >
-          <h2 className="text-lg font-bold mb-4" style={{ color: "var(--text-strong)" }}>
-            销售标签
-          </h2>
-          <div className="space-y-3">
-            {result.segmentTags.map((tag) => (
-              <div
-                key={tag.id}
-                className="rounded-xl px-4 py-3"
-                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
-              >
-                <div className="flex items-center justify-between gap-3 mb-1">
-                  <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>
-                    {tag.label}
+        {!customerFacing && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...ease, delay: 0.18 }}
+            className="rounded-2xl p-6"
+            style={{ background: "var(--bg-1)", border: "1px solid var(--border)" }}
+          >
+            <h2 className="text-lg font-bold mb-4" style={{ color: "var(--text-strong)" }}>
+              销售标签
+            </h2>
+            <div className="space-y-3">
+              {result.segmentTags.map((tag) => (
+                <div
+                  key={tag.id}
+                  className="rounded-xl px-4 py-3"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                >
+                  <div className="flex items-center justify-between gap-3 mb-1">
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>
+                      {tag.label}
+                    </p>
+                    <span
+                      className="text-[11px] px-2 py-1 rounded-full"
+                      style={{ background: "var(--gold-soft)", color: "var(--gold)" }}
+                    >
+                      {tag.priority}
+                    </span>
+                  </div>
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                    {tag.salesAction}
                   </p>
-                  <span
-                    className="text-[11px] px-2 py-1 rounded-full"
-                    style={{ background: "var(--gold-soft)", color: "var(--gold)" }}
-                  >
-                    {tag.priority}
-                  </span>
                 </div>
-                <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                  {tag.salesAction}
-                </p>
-              </div>
-            ))}
-          </div>
-        </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ ...ease, delay: 0.24 }}
+          transition={{ ...ease, delay: customerFacing ? 0.18 : 0.24 }}
           className="rounded-2xl p-6"
           style={{ background: "var(--bg-1)", border: "1px solid var(--border)" }}
         >

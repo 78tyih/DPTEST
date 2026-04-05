@@ -40,6 +40,8 @@ async function main() {
 
   assert.equal(html.includes(ORDERFLOW_RESULT_TITLE), true);
   assert.equal(html.includes("付费意向"), false);
+  assert.equal(html.includes("销售标签"), false);
+  assert.equal(html.includes(result.segmentTags[0]?.label ?? ""), false);
   assert.equal(html.includes(result.customerProfile.paymentIntent.label), false);
   assert.equal(html.includes("交易阶段"), true);
 
