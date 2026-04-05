@@ -2,7 +2,13 @@ import React from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, BookOpen, ExternalLink, LockKeyhole, Radar, ShieldCheck, Wrench } from "lucide-react";
 import { diagnosticDimensionLabels, diagnosticTracks } from "@/data/orderflowDiagnostic";
-import { dimensionGuidanceMap, routeActionPlanMap } from "@/data/orderflowCustomerGuidance";
+import {
+  buildImmediateActionSuggestion,
+  customerScoreBandCopyMap,
+  dimensionGuidanceMap,
+  routeActionPlanMap,
+} from "@/data/orderflowCustomerGuidance";
+import type { OrderflowScoreBandId } from "@/data/orderflowLogicMap";
 import type { OrderflowDiagnosticResult } from "@/utils/orderflowDiagnostic";
 import { resolveRewardAction } from "@/utils/diagnosticLinks";
 import { useTracking } from "@/hooks/use-tracking";
@@ -172,6 +178,8 @@ export default function OrderflowDiagnosticView({
   const visibleRewards = customerFacing && !showAllRewards
     ? result.unlockRewards.slice(0, 2)
     : result.unlockRewards;
+  const customerScoreBandCopy = customerScoreBandCopyMap[result.scoreBand.id as OrderflowScoreBandId];
+  const customerTrackLabel = result.trackId === "deep" ? "深度诊断" : "阶段诊断";
   const strengthGuidance = result.topDimensions.map((dimension) => ({
     dimension,
     label: diagnosticDimensionLabels[dimension],
@@ -183,6 +191,12 @@ export default function OrderflowDiagnosticView({
     guidance: dimensionGuidanceMap[dimension],
   }));
   const actionPlan = routeActionPlanMap[result.systemMapping.route.id];
+  const immediateActionSuggestion = buildImmediateActionSuggestion({
+    trackId: result.trackId,
+    weakestLabels: weaknessGuidance.map((item) => item.label),
+    routeLabel: result.recommendedPath,
+  });
+  const customerSummary = `你当前更接近「${customerScoreBandCopy.title}」。从六维结果看，优势主要集中在 ${strengthGuidance.map((item) => item.label).join("、")}，而接下来最值得优先补强的是 ${weaknessGuidance.map((item) => item.label).join("、")}。`;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-0)" }}>
@@ -197,7 +211,7 @@ export default function OrderflowDiagnosticView({
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs tracking-wider mb-2" style={{ color: "var(--gold)" }}>
-                {track.title} · {track.duration}
+                {customerFacing ? customerTrackLabel : track.title} · {track.duration}
               </p>
               <h1 className="text-2xl font-heading font-bold mb-2" style={{ color: "var(--text-strong)" }}>
                 {title}
@@ -230,10 +244,10 @@ export default function OrderflowDiagnosticView({
           <div className="flex items-center justify-between gap-4 mb-3">
             <div>
               <h2 className="text-lg font-bold" style={{ color: "var(--text-strong)" }}>
-                {result.scoreBand.title}
+                {customerFacing ? customerScoreBandCopy.title : result.scoreBand.title}
               </h2>
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                {result.scoreBand.summary}
+                {customerFacing ? customerScoreBandCopy.summary : result.scoreBand.summary}
               </p>
             </div>
             <div className="text-right">
@@ -301,7 +315,7 @@ export default function OrderflowDiagnosticView({
           </h2>
           <div className="rounded-xl px-4 py-3 mb-4" style={{ background: "rgba(var(--primary-rgb), 0.08)" }}>
             <p className="text-sm leading-relaxed" style={{ color: "var(--text-strong)" }}>
-              {result.userSummary}
+              {customerFacing ? customerSummary : result.userSummary}
             </p>
           </div>
           <div className="grid md:grid-cols-2 gap-3 mb-4">
@@ -403,7 +417,7 @@ export default function OrderflowDiagnosticView({
                 报告结论
               </p>
               <p className="text-sm leading-relaxed" style={{ color: "var(--text-strong)" }}>
-                你当前更接近「{result.scoreBand.title}」，优势集中在 {strengthGuidance.map((item) => item.label).join("、")}，当前最值得优先补强的是 {weaknessGuidance.map((item) => item.label).join("、")}。
+                你当前更接近「{customerScoreBandCopy.title}」，优势集中在 {strengthGuidance.map((item) => item.label).join("、")}，当前最值得优先补强的是 {weaknessGuidance.map((item) => item.label).join("、")}。
               </p>
             </div>
 
@@ -497,6 +511,14 @@ export default function OrderflowDiagnosticView({
               </p>
               <p className="text-sm leading-relaxed" style={{ color: "var(--text-strong)" }}>
                 当前最优先需要提升的是 {weaknessGuidance.map((item) => item.label).join("、")}。结合德湃的订单流课程、交易系统和相关工具，重点目标是把这些短板变成稳定可执行的能力，而不是只停留在理解层面。
+              </p>
+            </div>
+            <div className="rounded-xl px-4 py-3 mt-4" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                立即行动建议
+              </p>
+              <p className="text-sm leading-relaxed" style={{ color: "var(--text-strong)" }}>
+                {immediateActionSuggestion}
               </p>
             </div>
           </motion.div>

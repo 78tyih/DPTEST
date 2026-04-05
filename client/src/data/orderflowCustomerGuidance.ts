@@ -1,5 +1,6 @@
-import type { DiagnosticDimension } from "./orderflowDiagnostic";
+import type { DiagnosticDimension, DiagnosticTrackId } from "./orderflowDiagnostic";
 import type { OrderflowSystemRouteId } from "./orderflowLogicMap";
+import type { OrderflowScoreBandId } from "./orderflowLogicMap";
 
 export interface DimensionGuidance {
   strengthMeaning: string;
@@ -51,6 +52,42 @@ export interface CustomerActionPlanStep {
   title: string;
   detail: string;
 }
+
+export interface CustomerScoreBandCopy {
+  title: string;
+  summary: string;
+}
+
+export const customerScoreBandCopyMap: Record<OrderflowScoreBandId, CustomerScoreBandCopy> = {
+  "starter-foundation": {
+    title: "先把基础框架搭起来",
+    summary: "你当前最重要的是先建立正确认知和学习顺序，把基础盘面理解和训练预期先打稳。",
+  },
+  "starter-ready": {
+    title: "已经具备继续深化的基础",
+    summary: "你已经不处于纯入门阶段，接下来更适合看更完整的诊断与训练建议，明确后续提升方向。",
+  },
+  "starter-upgrade": {
+    title: "适合进入完整训练视角",
+    summary: "你已经有比较明确的基础和学习意愿，适合继续看完整报告并开始系统化提升。",
+  },
+  "deep-observe": {
+    title: "先补认知与训练底盘",
+    summary: "当前更适合先把认知、风控和执行底盘补稳，避免过早放大结果目标。",
+  },
+  "deep-build": {
+    title: "已进入稳定提升阶段",
+    summary: "你已经具备一定基础，接下来适合用系统训练把理解、执行和复盘逐步固化下来。",
+  },
+  "deep-convert": {
+    title: "方向明确，进入强化提升期",
+    summary: "你的基础、训练意愿和提升方向已经较清晰，适合进入更完整的课程、系统和工具组合提升。",
+  },
+  "deep-priority": {
+    title: "具备加速提升条件",
+    summary: "你当前具备较好的基础和行动条件，重点是把结构化训练、固定系统和执行工具尽快连起来。",
+  },
+};
 
 export const routeActionPlanMap: Record<OrderflowSystemRouteId, CustomerActionPlanStep[]> = {
   "cognition-foundation": [
@@ -138,3 +175,21 @@ export const routeActionPlanMap: Record<OrderflowSystemRouteId, CustomerActionPl
     },
   ],
 };
+
+export function buildImmediateActionSuggestion({
+  trackId,
+  weakestLabels,
+  routeLabel,
+}: {
+  trackId: DiagnosticTrackId;
+  weakestLabels: string[];
+  routeLabel: string;
+}) {
+  const weakest = weakestLabels.join("、");
+
+  if (trackId === "starter") {
+    return `先围绕 ${weakest} 补基础内容，再继续完成更完整的诊断与训练规划。`;
+  }
+
+  return `先围绕 ${weakest} 启动第一轮训练，再结合德湃课程、交易系统和相关工具，把「${routeLabel}」这条提升路径真正落到执行里。`;
+}
