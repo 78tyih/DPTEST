@@ -60,6 +60,7 @@ async function main() {
   assert.equal(html.includes("深测"), false);
   assert.equal(html.includes("立即行动建议"), true);
   assert.equal(html.includes(">立即行动<"), true);
+  assert.equal(html.includes("添加客服后可领取对应课程、工具和后续诊断入口"), true);
   assert.equal(html.includes("交易阶段"), false);
 
   console.log("test-orderflow-result-presentation: ok");

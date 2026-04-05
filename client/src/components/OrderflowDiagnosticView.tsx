@@ -536,6 +536,9 @@ export default function OrderflowDiagnosticView({
             >
               {customerAction?.label ?? "立即行动"}
             </button>
+            <p className="text-xs text-center mt-2" style={{ color: "var(--text-muted)" }}>
+              添加客服后可领取对应课程、工具和后续诊断入口
+            </p>
           </motion.div>
         ) : null}
 
