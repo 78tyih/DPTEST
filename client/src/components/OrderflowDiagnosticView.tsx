@@ -32,6 +32,130 @@ const iconMap = {
   "commercial-intent": LockKeyhole,
 };
 
+const radarDimensions = [
+  "awareness",
+  "market-fit",
+  "risk-control",
+  "execution",
+  "tool-readiness",
+  "commercial-intent",
+] as const;
+
+function OrderflowRadarChart({
+  scores,
+}: {
+  scores: OrderflowDiagnosticResult["normalizedScores"];
+}) {
+  const center = 140;
+  const radius = 96;
+  const levels = [0.25, 0.5, 0.75, 1];
+  const points = radarDimensions.map((dimension, index) => {
+    const angle = (-Math.PI / 2) + (index * Math.PI * 2) / radarDimensions.length;
+    const scoreRadius = radius * (scores[dimension] / 100);
+    const labelRadius = radius + 28;
+
+    return {
+      dimension,
+      angle,
+      x: center + Math.cos(angle) * scoreRadius,
+      y: center + Math.sin(angle) * scoreRadius,
+      axisX: center + Math.cos(angle) * radius,
+      axisY: center + Math.sin(angle) * radius,
+      labelX: center + Math.cos(angle) * labelRadius,
+      labelY: center + Math.sin(angle) * labelRadius,
+      score: scores[dimension],
+      label: diagnosticDimensionLabels[dimension],
+    };
+  });
+
+  const polygon = points.map((point) => `${point.x},${point.y}`).join(" ");
+
+  return (
+    <div
+      className="mx-auto mb-5 w-full max-w-[320px]"
+      data-testid="orderflow-radar-chart"
+    >
+      <svg viewBox="0 0 280 280" className="w-full h-auto">
+        {levels.map((level) => {
+          const ring = radarDimensions
+            .map((_, index) => {
+              const angle = (-Math.PI / 2) + (index * Math.PI * 2) / radarDimensions.length;
+              const x = center + Math.cos(angle) * radius * level;
+              const y = center + Math.sin(angle) * radius * level;
+              return `${x},${y}`;
+            })
+            .join(" ");
+
+          return (
+            <polygon
+              key={level}
+              points={ring}
+              fill="none"
+              stroke="rgba(255,255,255,0.08)"
+              strokeWidth="1"
+            />
+          );
+        })}
+
+        {points.map((point) => (
+          <line
+            key={point.dimension}
+            x1={center}
+            y1={center}
+            x2={point.axisX}
+            y2={point.axisY}
+            stroke="rgba(255,255,255,0.08)"
+            strokeWidth="1"
+          />
+        ))}
+
+        <polygon
+          points={polygon}
+          fill="rgba(var(--primary-rgb), 0.18)"
+          stroke="var(--primary)"
+          strokeWidth="2"
+        />
+
+        {points.map((point) => (
+          <circle
+            key={`${point.dimension}-dot`}
+            cx={point.x}
+            cy={point.y}
+            r="3.5"
+            fill="var(--primary)"
+          />
+        ))}
+
+        {points.map((point) => (
+          <g key={`${point.dimension}-label`}>
+            <text
+              x={point.labelX}
+              y={point.labelY}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="var(--text-muted)"
+              fontSize="11"
+            >
+              {point.label}
+            </text>
+            <text
+              x={point.labelX}
+              y={point.labelY + 14}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="var(--text-strong)"
+              fontSize="11"
+              fontWeight="700"
+            >
+              {point.score}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
 export default function OrderflowDiagnosticView({
   result,
   title,
@@ -122,6 +246,40 @@ export default function OrderflowDiagnosticView({
           className="rounded-2xl p-6"
           style={{ background: "var(--bg-1)", border: "1px solid var(--border)" }}
         >
+          <h2 className="text-lg font-bold mb-4" style={{ color: "var(--text-strong)" }}>
+            六维诊断
+          </h2>
+          <OrderflowRadarChart scores={result.normalizedScores} />
+          <div className="space-y-4 mb-5">
+            {sortedDimensions.map(([dimension, score], index) => {
+              const Icon = iconMap[dimension as keyof typeof iconMap] || Radar;
+              return (
+                <div key={dimension}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <Icon className="w-4 h-4" style={{ color: index === 0 ? "var(--gold)" : "var(--text-muted)" }} />
+                      <span className="text-sm" style={{ color: "var(--text-strong)" }}>
+                        {diagnosticDimensionLabels[dimension as keyof typeof diagnosticDimensionLabels]}
+                      </span>
+                    </div>
+                    <span className="text-sm font-num font-bold" style={{ color: "var(--text-strong)" }}>
+                      {score}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${score}%`,
+                        background: index === 0 ? "var(--gold)" : "var(--primary)",
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
           <h2 className="text-lg font-bold mb-3" style={{ color: "var(--text-strong)" }}>
             当前判断
           </h2>
@@ -205,38 +363,6 @@ export default function OrderflowDiagnosticView({
             </p>
           </div>
 
-          <h2 className="text-lg font-bold mb-4" style={{ color: "var(--text-strong)" }}>
-            六维诊断
-          </h2>
-          <div className="space-y-4">
-            {sortedDimensions.map(([dimension, score], index) => {
-              const Icon = iconMap[dimension as keyof typeof iconMap] || Radar;
-              return (
-                <div key={dimension}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <Icon className="w-4 h-4" style={{ color: index === 0 ? "var(--gold)" : "var(--text-muted)" }} />
-                      <span className="text-sm" style={{ color: "var(--text-strong)" }}>
-                        {diagnosticDimensionLabels[dimension as keyof typeof diagnosticDimensionLabels]}
-                      </span>
-                    </div>
-                    <span className="text-sm font-num font-bold" style={{ color: "var(--text-strong)" }}>
-                      {score}
-                    </span>
-                  </div>
-                  <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${score}%`,
-                        background: index === 0 ? "var(--gold)" : "var(--primary)",
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
         </motion.div>
 
         {!customerFacing && (

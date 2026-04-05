@@ -43,7 +43,9 @@ async function main() {
   assert.equal(html.includes("销售标签"), false);
   assert.equal(html.includes(result.segmentTags[0]?.label ?? ""), false);
   assert.equal(html.includes(result.customerProfile.paymentIntent.label), false);
+  assert.equal(html.includes('data-testid="orderflow-radar-chart"'), true);
   assert.equal(html.includes("交易阶段"), true);
+  assert.equal(html.indexOf("六维诊断") < html.indexOf("当前判断"), true);
 
   console.log("test-orderflow-result-presentation: ok");
 }
