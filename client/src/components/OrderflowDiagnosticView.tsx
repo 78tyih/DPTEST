@@ -167,6 +167,10 @@ export default function OrderflowDiagnosticView({
   const sortedDimensions = Object.entries(result.normalizedScores).sort((a, b) => b[1] - a[1]);
   const track = diagnosticTracks[result.trackId];
   const { trackEvent } = useTracking();
+  const [showAllRewards, setShowAllRewards] = React.useState(false);
+  const visibleRewards = customerFacing && !showAllRewards
+    ? result.unlockRewards.slice(0, 2)
+    : result.unlockRewards;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-0)" }}>
@@ -222,7 +226,7 @@ export default function OrderflowDiagnosticView({
             </div>
             <div className="text-right">
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                推荐路径
+                {customerFacing ? "建议方向" : "推荐路径"}
               </p>
               <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>
                 {result.recommendedPath}
@@ -231,7 +235,7 @@ export default function OrderflowDiagnosticView({
           </div>
           <div className="rounded-xl px-4 py-3" style={{ background: "rgba(var(--primary-rgb), 0.08)" }}>
             <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-              建议动作
+              {customerFacing ? "下一步建议" : "建议动作"}
             </p>
             <p className="text-sm leading-relaxed" style={{ color: "var(--text-strong)" }}>
               {result.recommendedAction}
@@ -345,23 +349,25 @@ export default function OrderflowDiagnosticView({
             </div>
           </div>
 
-          <div
-            className="rounded-xl px-4 py-3 mb-4"
-            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
-          >
-            <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-              交易系统映射
-            </p>
-            <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-strong)" }}>
-              {result.systemMapping.route.label}
-            </p>
-            <p className="text-xs leading-relaxed mb-1" style={{ color: "var(--text-muted)" }}>
-              {result.systemMapping.route.fitFor}
-            </p>
-            <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-              {result.systemMapping.reason}
-            </p>
-          </div>
+          {!customerFacing && (
+            <div
+              className="rounded-xl px-4 py-3 mb-4"
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                交易系统映射
+              </p>
+              <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-strong)" }}>
+                {result.systemMapping.route.label}
+              </p>
+              <p className="text-xs leading-relaxed mb-1" style={{ color: "var(--text-muted)" }}>
+                {result.systemMapping.route.fitFor}
+              </p>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                {result.systemMapping.reason}
+              </p>
+            </div>
+          )}
 
         </motion.div>
 
@@ -411,10 +417,15 @@ export default function OrderflowDiagnosticView({
           style={{ background: "var(--bg-1)", border: "1px solid var(--border)" }}
         >
           <h2 className="text-lg font-bold mb-4" style={{ color: "var(--text-strong)" }}>
-            已解锁资料
+            {customerFacing ? "学习资料与下一步" : "已解锁资料"}
           </h2>
+          {customerFacing ? (
+            <p className="text-sm leading-relaxed mb-4" style={{ color: "var(--text-muted)" }}>
+              先看前两项重点资料，剩余内容可按需要展开。
+            </p>
+          ) : null}
           <div className="space-y-3">
-            {result.unlockRewards.map((reward) => {
+            {visibleRewards.map((reward) => {
               const action = resolveRewardAction(reward);
               return (
                 <div
@@ -448,6 +459,16 @@ export default function OrderflowDiagnosticView({
               );
             })}
           </div>
+          {customerFacing && result.unlockRewards.length > 2 ? (
+            <button
+              type="button"
+              onClick={() => setShowAllRewards((value) => !value)}
+              className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium"
+              style={{ color: "var(--gold)" }}
+            >
+              {showAllRewards ? "收起资料" : "展开全部资料"}
+            </button>
+          ) : null}
         </motion.div>
 
         {(primaryAction || secondaryAction) && (

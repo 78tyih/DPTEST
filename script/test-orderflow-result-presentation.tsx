@@ -44,6 +44,10 @@ async function main() {
   assert.equal(html.includes(result.segmentTags[0]?.label ?? ""), false);
   assert.equal(html.includes(result.customerProfile.paymentIntent.label), false);
   assert.equal(html.includes('data-testid="orderflow-radar-chart"'), true);
+  assert.equal(html.includes("交易系统映射"), false);
+  assert.equal(html.includes("建议方向"), true);
+  assert.equal(html.includes("学习资料与下一步"), true);
+  assert.equal(html.includes("展开全部资料"), true);
   assert.equal(html.includes("交易阶段"), true);
   assert.equal(html.indexOf("六维诊断") < html.indexOf("当前判断"), true);
 
