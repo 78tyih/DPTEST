@@ -14,6 +14,7 @@ import { usePageView, useTracking } from "@/hooks/use-tracking";
 import OrderflowDiagnosticView from "@/components/OrderflowDiagnosticView";
 import { reconstructOrderflowResultFromStoredRecord } from "@/utils/orderflowStorage";
 import { buildSurveyEntryUrl } from "@/utils/diagnosticLinks";
+import { ORDERFLOW_REPORT_SUBTITLE, ORDERFLOW_REPORT_TITLE } from "@/data/orderflowPresentation";
 
 const ease = { duration: 0.22, ease: "easeOut" as const };
 
@@ -96,8 +97,8 @@ export default function ReportPage() {
     return (
       <OrderflowDiagnosticView
         result={orderflowResult}
-        title="订单流诊断完整报告"
-        subtitle="这份报告更适合用于销售跟进和后续路径承接，你也可以把它当成后续学习的优先级地图。"
+        title={ORDERFLOW_REPORT_TITLE}
+        subtitle={ORDERFLOW_REPORT_SUBTITLE}
         customerFacing
       />
     );
