@@ -22,6 +22,7 @@ import { queryClient } from "@/lib/queryClient";
 import { buildResultWebhookPayload, sendResultWebhook } from "@/utils/webhook";
 import OrderflowDiagnosticView from "@/components/OrderflowDiagnosticView";
 import { ORDERFLOW_RESULT_SUBTITLE, ORDERFLOW_RESULT_TITLE } from "@/data/orderflowPresentation";
+import WeChatContactModal from "@/components/WeChatContactModal";
 
 interface ResultPageProps {
   result: QuizResult | OrderflowDiagnosticResult;
@@ -532,22 +533,34 @@ function CharacterCardPanel({ result, onClose, tier }: { result: QuizResult; onC
 }
 
 export default function ResultPage({ result }: ResultPageProps) {
+  const [showWeChatContactModal, setShowWeChatContactModal] = useState(false);
+
   if ("trackId" in result) {
     return (
-      <OrderflowDiagnosticView
-        result={result}
-        title={ORDERFLOW_RESULT_TITLE}
-        subtitle={ORDERFLOW_RESULT_SUBTITLE}
-        customerFacing
-        primaryAction={{
-          label: "回到个人主页",
-          onClick: () => window.location.assign("/home"),
-        }}
-        secondaryAction={{
-          label: "重新开始诊断",
-          onClick: () => window.location.assign("/intake"),
-        }}
-      />
+      <>
+        <OrderflowDiagnosticView
+          result={result}
+          title={ORDERFLOW_RESULT_TITLE}
+          subtitle={ORDERFLOW_RESULT_SUBTITLE}
+          customerFacing
+          customerAction={{
+            label: "立即行动",
+            onClick: () => setShowWeChatContactModal(true),
+          }}
+          primaryAction={{
+            label: "回到个人主页",
+            onClick: () => window.location.assign("/home"),
+          }}
+          secondaryAction={{
+            label: "重新开始诊断",
+            onClick: () => window.location.assign("/intake"),
+          }}
+        />
+        <WeChatContactModal
+          open={showWeChatContactModal}
+          onClose={() => setShowWeChatContactModal(false)}
+        />
+      </>
     );
   }
 

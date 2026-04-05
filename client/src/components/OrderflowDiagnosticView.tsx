@@ -20,6 +20,10 @@ interface OrderflowDiagnosticViewProps {
   title: string;
   subtitle: string;
   customerFacing?: boolean;
+  customerAction?: {
+    label: string;
+    onClick: () => void;
+  };
   primaryAction?: {
     label: string;
     onClick: () => void;
@@ -168,6 +172,7 @@ export default function OrderflowDiagnosticView({
   title,
   subtitle,
   customerFacing = false,
+  customerAction,
   primaryAction,
   secondaryAction,
 }: OrderflowDiagnosticViewProps) {
@@ -309,92 +314,90 @@ export default function OrderflowDiagnosticView({
               );
             })}
           </div>
+          {!customerFacing ? (
+            <>
+              <h2 className="text-lg font-bold mb-3" style={{ color: "var(--text-strong)" }}>
+                当前判断
+              </h2>
+              <div className="rounded-xl px-4 py-3 mb-4" style={{ background: "rgba(var(--primary-rgb), 0.08)" }}>
+                <p className="text-sm leading-relaxed" style={{ color: "var(--text-strong)" }}>
+                  {result.userSummary}
+                </p>
+              </div>
+              <div className="grid md:grid-cols-2 gap-3 mb-4">
+                <div
+                  className="rounded-xl px-4 py-3"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                >
+                  <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                    交易阶段
+                  </p>
+                  <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-strong)" }}>
+                    {result.customerProfile.traderStage.label}
+                  </p>
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                    {result.customerProfile.traderStage.summary}
+                  </p>
+                </div>
+                <div
+                  className="rounded-xl px-4 py-3"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                >
+                  <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                    付费意向
+                  </p>
+                  <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-strong)" }}>
+                    {result.customerProfile.paymentIntent.label}
+                  </p>
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                    {result.customerProfile.paymentIntent.summary}
+                  </p>
+                </div>
+              </div>
+              <div className="grid md:grid-cols-2 gap-3 mb-4">
+                <div
+                  className="rounded-xl px-4 py-3"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                >
+                  <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                    当前强项
+                  </p>
+                  <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>
+                    {result.topDimensions.map((dimension) => diagnosticDimensionLabels[dimension]).join("、")}
+                  </p>
+                </div>
+                <div
+                  className="rounded-xl px-4 py-3"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                >
+                  <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                    优先补强
+                  </p>
+                  <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>
+                    {result.bottomDimensions.map((dimension) => diagnosticDimensionLabels[dimension]).join("、")}
+                  </p>
+                </div>
+              </div>
 
-          <h2 className="text-lg font-bold mb-3" style={{ color: "var(--text-strong)" }}>
-            当前判断
-          </h2>
-          <div className="rounded-xl px-4 py-3 mb-4" style={{ background: "rgba(var(--primary-rgb), 0.08)" }}>
-            <p className="text-sm leading-relaxed" style={{ color: "var(--text-strong)" }}>
-              {customerFacing ? customerSummary : result.userSummary}
-            </p>
-          </div>
-          <div className="grid md:grid-cols-2 gap-3 mb-4">
-            <div
-              className="rounded-xl px-4 py-3"
-              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
-            >
-              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-                交易阶段
-              </p>
-              <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-strong)" }}>
-                {result.customerProfile.traderStage.label}
-              </p>
-              <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                {result.customerProfile.traderStage.summary}
-              </p>
-            </div>
-            {!customerFacing && (
               <div
-                className="rounded-xl px-4 py-3"
+                className="rounded-xl px-4 py-3 mb-4"
                 style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
               >
                 <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-                  付费意向
+                  交易系统映射
                 </p>
-                <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-strong)" }}>
-                  {result.customerProfile.paymentIntent.label}
+                <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-strong)" }}>
+                  {result.systemMapping.route.label}
+                </p>
+                <p className="text-xs leading-relaxed mb-1" style={{ color: "var(--text-muted)" }}>
+                  {result.systemMapping.route.fitFor}
                 </p>
                 <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                  {result.customerProfile.paymentIntent.summary}
+                  {result.systemMapping.reason}
                 </p>
               </div>
-            )}
-          </div>
-          <div className="grid md:grid-cols-2 gap-3 mb-4">
-            <div
-              className="rounded-xl px-4 py-3"
-              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
-            >
-              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-                当前强项
-              </p>
-              <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>
-                {result.topDimensions.map((dimension) => diagnosticDimensionLabels[dimension]).join("、")}
-              </p>
-            </div>
-            <div
-              className="rounded-xl px-4 py-3"
-              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
-            >
-              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-                优先补强
-              </p>
-              <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>
-                {result.bottomDimensions.map((dimension) => diagnosticDimensionLabels[dimension]).join("、")}
-              </p>
-            </div>
-          </div>
-
-          {!customerFacing && (
-            <div
-              className="rounded-xl px-4 py-3 mb-4"
-              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
-            >
-              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-                交易系统映射
-              </p>
-              <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-strong)" }}>
-                {result.systemMapping.route.label}
-              </p>
-              <p className="text-xs leading-relaxed mb-1" style={{ color: "var(--text-muted)" }}>
-                {result.systemMapping.route.fitFor}
-              </p>
-              <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                {result.systemMapping.reason}
-              </p>
-            </div>
-          )}
-
+            </>
+          ) : null}
         </motion.div>
 
         {customerFacing ? (
@@ -476,21 +479,25 @@ export default function OrderflowDiagnosticView({
             style={{ background: "var(--bg-1)", border: "1px solid var(--border)" }}
           >
             <h2 className="text-lg font-bold mb-4" style={{ color: "var(--text-strong)" }}>
-              诊断方案
+              学习路径建议
             </h2>
             <p className="text-sm leading-relaxed mb-4" style={{ color: "var(--text-muted)" }}>
               结合你当前的六维结果，后续提升更适合按照“认知与训练打底、交易系统固化、工具与产品放大执行”的顺序推进。
             </p>
-            <div className="space-y-3">
+            <div className="relative pl-8 space-y-3">
+              <div
+                className="absolute left-[10px] top-2 bottom-2 w-px"
+                style={{ background: "linear-gradient(180deg, rgba(var(--gold-rgb),0.45), rgba(var(--gold-rgb),0.08))" }}
+              />
               {actionPlan.map((step, index) => (
                 <div
                   key={step.title}
                   className="rounded-xl px-4 py-3"
                   style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
                 >
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 relative">
                     <span
-                      className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold"
+                      className="absolute -left-9 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold"
                       style={{ background: "var(--gold-soft)", color: "var(--gold)" }}
                     >
                       {index + 1}
@@ -521,6 +528,14 @@ export default function OrderflowDiagnosticView({
                 {immediateActionSuggestion}
               </p>
             </div>
+            <button
+              type="button"
+              onClick={customerAction?.onClick ?? (() => {})}
+              className="w-full h-12 rounded-xl font-bold text-white mt-4"
+              style={{ background: "var(--primary)" }}
+            >
+              {customerAction?.label ?? "立即行动"}
+            </button>
           </motion.div>
         ) : null}
 

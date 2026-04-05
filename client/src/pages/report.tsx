@@ -15,6 +15,7 @@ import OrderflowDiagnosticView from "@/components/OrderflowDiagnosticView";
 import { reconstructOrderflowResultFromStoredRecord } from "@/utils/orderflowStorage";
 import { buildSurveyEntryUrl } from "@/utils/diagnosticLinks";
 import { ORDERFLOW_REPORT_SUBTITLE, ORDERFLOW_REPORT_TITLE } from "@/data/orderflowPresentation";
+import WeChatContactModal from "@/components/WeChatContactModal";
 
 const ease = { duration: 0.22, ease: "easeOut" as const };
 
@@ -45,6 +46,7 @@ export default function ReportPage() {
   const [, params] = useRoute("/report/:token");
   const token = params?.token;
   const surveyEntryUrl = buildSurveyEntryUrl();
+  const [showWeChatContactModal, setShowWeChatContactModal] = useState(false);
 
   const { data, isLoading, error } = useQuery<ReportData>({
     queryKey: ["/api/report", token],
@@ -95,12 +97,22 @@ export default function ReportPage() {
 
   if (orderflowResult) {
     return (
-      <OrderflowDiagnosticView
-        result={orderflowResult}
-        title={ORDERFLOW_REPORT_TITLE}
-        subtitle={ORDERFLOW_REPORT_SUBTITLE}
-        customerFacing
-      />
+      <>
+        <OrderflowDiagnosticView
+          result={orderflowResult}
+          title={ORDERFLOW_REPORT_TITLE}
+          subtitle={ORDERFLOW_REPORT_SUBTITLE}
+          customerFacing
+          customerAction={{
+            label: "立即行动",
+            onClick: () => setShowWeChatContactModal(true),
+          }}
+        />
+        <WeChatContactModal
+          open={showWeChatContactModal}
+          onClose={() => setShowWeChatContactModal(false)}
+        />
+      </>
     );
   }
 

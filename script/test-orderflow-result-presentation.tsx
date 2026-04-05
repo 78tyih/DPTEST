@@ -49,15 +49,17 @@ async function main() {
   assert.equal(html.includes("学习资料与下一步"), true);
   assert.equal(html.includes("展开全部资料"), true);
   assert.equal(html.includes("专业解读"), true);
-  assert.equal(html.includes("诊断方案"), true);
+  assert.equal(html.includes("诊断方案"), false);
+  assert.equal(html.includes("当前判断"), false);
+  assert.equal(html.includes("学习路径建议"), true);
   assert.equal(html.includes("优势项参考"), true);
   assert.equal(html.includes("短板项参考"), true);
   assert.equal(html.includes("高优先级客户"), false);
   assert.equal(html.includes("承接"), false);
   assert.equal(html.includes("深测"), false);
   assert.equal(html.includes("立即行动建议"), true);
-  assert.equal(html.includes("交易阶段"), true);
-  assert.equal(html.indexOf("六维诊断") < html.indexOf("当前判断"), true);
+  assert.equal(html.includes(">立即行动<"), true);
+  assert.equal(html.includes("交易阶段"), false);
 
   console.log("test-orderflow-result-presentation: ok");
 }
