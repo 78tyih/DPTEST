@@ -2,6 +2,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, BookOpen, ExternalLink, LockKeyhole, Radar, ShieldCheck, Wrench } from "lucide-react";
 import { diagnosticDimensionLabels, diagnosticTracks } from "@/data/orderflowDiagnostic";
+import { dimensionGuidanceMap, routeActionPlanMap } from "@/data/orderflowCustomerGuidance";
 import type { OrderflowDiagnosticResult } from "@/utils/orderflowDiagnostic";
 import { resolveRewardAction } from "@/utils/diagnosticLinks";
 import { useTracking } from "@/hooks/use-tracking";
@@ -171,6 +172,17 @@ export default function OrderflowDiagnosticView({
   const visibleRewards = customerFacing && !showAllRewards
     ? result.unlockRewards.slice(0, 2)
     : result.unlockRewards;
+  const strengthGuidance = result.topDimensions.map((dimension) => ({
+    dimension,
+    label: diagnosticDimensionLabels[dimension],
+    guidance: dimensionGuidanceMap[dimension],
+  }));
+  const weaknessGuidance = result.bottomDimensions.map((dimension) => ({
+    dimension,
+    label: diagnosticDimensionLabels[dimension],
+    guidance: dimensionGuidanceMap[dimension],
+  }));
+  const actionPlan = routeActionPlanMap[result.systemMapping.route.id];
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-0)" }}>
@@ -370,6 +382,125 @@ export default function OrderflowDiagnosticView({
           )}
 
         </motion.div>
+
+        {customerFacing ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...ease, delay: 0.16 }}
+            className="rounded-2xl p-6"
+            style={{ background: "var(--bg-1)", border: "1px solid var(--border)" }}
+          >
+            <h2 className="text-lg font-bold mb-4" style={{ color: "var(--text-strong)" }}>
+              专业解读
+            </h2>
+            <p className="text-sm leading-relaxed mb-4" style={{ color: "var(--text-muted)" }}>
+              这份六维诊断反映的是你当前在订单流学习和交易执行中的结构状态。高分项代表你已经具备一定基础，低分项代表后续提升最值得优先投入的方向。
+            </p>
+
+            <div className="rounded-xl px-4 py-3 mb-4" style={{ background: "rgba(var(--primary-rgb), 0.08)" }}>
+              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                报告结论
+              </p>
+              <p className="text-sm leading-relaxed" style={{ color: "var(--text-strong)" }}>
+                你当前更接近「{result.scoreBand.title}」，优势集中在 {strengthGuidance.map((item) => item.label).join("、")}，当前最值得优先补强的是 {weaknessGuidance.map((item) => item.label).join("、")}。
+              </p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 mb-4">
+              <div className="rounded-xl px-4 py-3" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                <p className="text-sm font-semibold mb-3" style={{ color: "var(--text-strong)" }}>
+                  优势项参考
+                </p>
+                <div className="space-y-3">
+                  {strengthGuidance.map((item) => (
+                    <div key={item.dimension}>
+                      <p className="text-xs font-semibold mb-1" style={{ color: "var(--gold)" }}>
+                        {item.label}
+                      </p>
+                      <p className="text-xs leading-relaxed mb-1" style={{ color: "var(--text-strong)" }}>
+                        {item.guidance.strengthMeaning}
+                      </p>
+                      <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                        参考意义：{item.guidance.referenceValue}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl px-4 py-3" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                <p className="text-sm font-semibold mb-3" style={{ color: "var(--text-strong)" }}>
+                  短板项参考
+                </p>
+                <div className="space-y-3">
+                  {weaknessGuidance.map((item) => (
+                    <div key={item.dimension}>
+                      <p className="text-xs font-semibold mb-1" style={{ color: "#F59E0B" }}>
+                        {item.label}
+                      </p>
+                      <p className="text-xs leading-relaxed mb-1" style={{ color: "var(--text-strong)" }}>
+                        {item.guidance.weaknessMeaning}
+                      </p>
+                      <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                        对你的参考：{item.guidance.referenceValue}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ) : null}
+
+        {customerFacing ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...ease, delay: 0.18 }}
+            className="rounded-2xl p-6"
+            style={{ background: "var(--bg-1)", border: "1px solid var(--border)" }}
+          >
+            <h2 className="text-lg font-bold mb-4" style={{ color: "var(--text-strong)" }}>
+              诊断方案
+            </h2>
+            <p className="text-sm leading-relaxed mb-4" style={{ color: "var(--text-muted)" }}>
+              结合你当前的六维结果，后续提升更适合按照“认知与训练打底、交易系统固化、工具与产品放大执行”的顺序推进。
+            </p>
+            <div className="space-y-3">
+              {actionPlan.map((step, index) => (
+                <div
+                  key={step.title}
+                  className="rounded-xl px-4 py-3"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold"
+                      style={{ background: "var(--gold-soft)", color: "var(--gold)" }}
+                    >
+                      {index + 1}
+                    </span>
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-strong)" }}>
+                      {step.title}
+                    </p>
+                  </div>
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                    {step.detail}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-xl px-4 py-3 mt-4" style={{ background: "rgba(var(--primary-rgb), 0.08)" }}>
+              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                对应提升重点
+              </p>
+              <p className="text-sm leading-relaxed" style={{ color: "var(--text-strong)" }}>
+                当前最优先需要提升的是 {weaknessGuidance.map((item) => item.label).join("、")}。结合德湃的订单流课程、交易系统和相关工具，重点目标是把这些短板变成稳定可执行的能力，而不是只停留在理解层面。
+              </p>
+            </div>
+          </motion.div>
+        ) : null}
 
         {!customerFacing && (
           <motion.div

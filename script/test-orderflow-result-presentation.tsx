@@ -48,6 +48,10 @@ async function main() {
   assert.equal(html.includes("建议方向"), true);
   assert.equal(html.includes("学习资料与下一步"), true);
   assert.equal(html.includes("展开全部资料"), true);
+  assert.equal(html.includes("专业解读"), true);
+  assert.equal(html.includes("诊断方案"), true);
+  assert.equal(html.includes("优势项参考"), true);
+  assert.equal(html.includes("短板项参考"), true);
   assert.equal(html.includes("交易阶段"), true);
   assert.equal(html.indexOf("六维诊断") < html.indexOf("当前判断"), true);
 
