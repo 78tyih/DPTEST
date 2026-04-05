@@ -609,17 +609,10 @@ function OrderflowHomeSummary({
                 {result.customerProfile.traderStage.label}
               </p>
             </div>
-            <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
-              <p className="text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>付费意向</p>
-              <p className="text-xs font-semibold" style={{ color: 'var(--text-strong)' }}>
-                {result.customerProfile.paymentIntent.label}
-              </p>
-            </div>
           </div>
           <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>推荐路径</p>
           <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{result.recommendedPath}</p>
           <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--text-muted)' }}>{result.recommendedAction}</p>
-          <p className="text-xs mt-3" style={{ color: 'var(--text-muted)' }}>交易系统映射：{result.systemMapping.route.label}</p>
         </div>
 
         <div className="grid gap-3 mb-4">

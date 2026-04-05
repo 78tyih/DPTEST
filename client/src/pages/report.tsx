@@ -98,6 +98,7 @@ export default function ReportPage() {
         result={orderflowResult}
         title="订单流诊断完整报告"
         subtitle="这份报告更适合用于销售跟进和后续路径承接，你也可以把它当成后续学习的优先级地图。"
+        customerFacing
       />
     );
   }
