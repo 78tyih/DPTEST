@@ -18,6 +18,7 @@ import { usePageView, useTracking } from "@/hooks/use-tracking";
 import { reconstructOrderflowResultFromStoredRecord } from "@/utils/orderflowStorage";
 import { diagnosticDimensionLabels, diagnosticTracks } from "@/data/orderflowDiagnostic";
 import { setActiveOrderflowTrack } from "@/utils/orderflowSession";
+import WeChatContactModal from "@/components/WeChatContactModal";
 
 const ease = { duration: 0.22, ease: "easeOut" as const };
 
@@ -100,6 +101,7 @@ export default function HomePage() {
   const { remaining: countdown, unlocked: reportUnlocked } = useCountdown(unlockTime);
 
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showWeChatContactModal, setShowWeChatContactModal] = useState(false);
 
   const shareResult = useMemo<QuizResult | null>(() => {
     if (!quizResult || !traderType || !rank || !legacyScores) return null;
@@ -198,14 +200,7 @@ export default function HomePage() {
               navigate("/result");
             }}
             onRetake={() => navigate("/intake")}
-            onRetakeStarter={() => {
-              setActiveOrderflowTrack("starter");
-              navigate("/intake");
-            }}
-            onRetakeDeep={() => {
-              setActiveOrderflowTrack("deep");
-              navigate("/intake");
-            }}
+            onContactAdvisor={() => setShowWeChatContactModal(true)}
             onViewReport={() => navigate(`/report/${quizResult!.shareToken}`)}
           />
         ) : hasResult ? (
@@ -526,6 +521,11 @@ export default function HomePage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <WeChatContactModal
+        open={showWeChatContactModal}
+        onClose={() => setShowWeChatContactModal(false)}
+      />
     </div>
   );
 }
@@ -553,8 +553,7 @@ function OrderflowHomeSummary({
   countdown,
   onViewDetail,
   onRetake,
-  onRetakeStarter,
-  onRetakeDeep,
+  onContactAdvisor,
   onViewReport,
 }: {
   quizResult: StoredQuizResult;
@@ -563,8 +562,7 @@ function OrderflowHomeSummary({
   countdown: string;
   onViewDetail: () => void;
   onRetake: () => void;
-  onRetakeStarter: () => void;
-  onRetakeDeep: () => void;
+  onContactAdvisor: () => void;
   onViewReport: () => void;
 }) {
   const sortedDimensions = Object.entries(result.normalizedScores).sort((a, b) => b[1] - a[1]).slice(0, 3);
@@ -640,30 +638,21 @@ function OrderflowHomeSummary({
             查看详情
           </button>
           <button
-            onClick={onRetake}
+            onClick={onContactAdvisor}
             className="py-2 rounded-xl text-sm font-medium"
-            style={{ border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}
+            style={{ border: '1px solid rgba(7,193,96,0.28)', color: '#E8E6E1', background: 'rgba(7,193,96,0.12)' }}
           >
-            重新测评
+            添加客服获取深度诊断报告
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          <button
-            onClick={onRetakeStarter}
-            className="py-2 rounded-xl text-xs font-medium"
-            style={{ border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}
-          >
-            重做浅测
-          </button>
-          <button
-            onClick={onRetakeDeep}
-            className="py-2 rounded-xl text-xs font-medium"
-            style={{ border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}
-          >
-            重做深测
-          </button>
-        </div>
+        <button
+          onClick={onRetake}
+          className="w-full py-2 rounded-xl text-xs font-medium mb-3"
+          style={{ border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}
+        >
+          重新测评
+        </button>
 
         {quizResult.shareToken ? (
           reportUnlocked ? (
@@ -676,7 +665,7 @@ function OrderflowHomeSummary({
             </button>
           ) : (
             <div className="text-center text-xs" style={{ color: 'var(--text-muted)' }}>
-              {countdown} 后可查看完整报告
+              添加客服后可领取深度诊断报告
             </div>
           )
         ) : null}
