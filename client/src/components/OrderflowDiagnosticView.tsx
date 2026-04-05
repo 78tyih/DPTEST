@@ -593,7 +593,7 @@ export default function OrderflowDiagnosticView({
             </p>
           ) : null}
           <div className="space-y-3">
-            {visibleRewards.map((reward) => {
+            {visibleRewards.map((reward, index) => {
               const action = resolveRewardAction(reward);
               return (
                 <div
@@ -601,6 +601,11 @@ export default function OrderflowDiagnosticView({
                   className="rounded-xl px-4 py-3"
                   style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
                 >
+                  {customerFacing && index === 0 ? (
+                    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full mb-2 text-[11px] font-semibold" style={{ background: "var(--gold-soft)", color: "var(--gold)" }}>
+                      推荐先看
+                    </div>
+                  ) : null}
                   <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-strong)" }}>
                     {reward.title}
                   </p>

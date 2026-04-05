@@ -47,6 +47,7 @@ async function main() {
   assert.equal(html.includes("交易系统映射"), false);
   assert.equal(html.includes("建议方向"), true);
   assert.equal(html.includes("学习资料与下一步"), true);
+  assert.equal(html.includes("推荐先看"), true);
   assert.equal(html.includes("展开全部资料"), true);
   assert.equal(html.includes("专业解读"), true);
   assert.equal(html.includes("诊断方案"), false);
