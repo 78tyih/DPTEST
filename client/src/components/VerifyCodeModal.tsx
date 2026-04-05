@@ -4,8 +4,9 @@ import { Copy, Check, ExternalLink, X, Smartphone, ArrowRightLeft } from "lucide
 import { SiWechat } from "react-icons/si";
 import { QRCodeSVG } from "qrcode.react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { DEFAULT_WECHAT_CONTACT_URL } from "@shared/wechatContact";
 
-const FALLBACK_URL = "https://work.weixin.qq.com/ca/cawcde66939ac2ab81";
+const FALLBACK_URL = DEFAULT_WECHAT_CONTACT_URL;
 
 interface VerifyCodeModalProps {
   open: boolean;

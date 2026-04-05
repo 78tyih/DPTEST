@@ -6,6 +6,8 @@ import { ChevronRight, LogIn } from "lucide-react";
 import LoginModal from "@/components/LoginModal";
 import { queryClient } from "@/lib/queryClient";
 import { usePageView } from "@/hooks/use-tracking";
+import { setActiveOrderflowTrack } from "@/utils/orderflowSession";
+import type { DiagnosticTrackId } from "@/data/orderflowDiagnostic";
 
 const ease = { duration: 0.22, ease: "easeOut" as const };
 
@@ -13,7 +15,19 @@ export default function LandingPage() {
   const [, navigate] = useLocation();
   const { user, isLoading } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
+  const [pendingTrack, setPendingTrack] = useState<DiagnosticTrackId | null>(null);
   const [userCount, setUserCount] = useState<number | null>(null);
+  const trackFromQuery = (() => {
+    if (typeof window === "undefined") return null;
+    const track = new URLSearchParams(window.location.search).get("track");
+    return track === "starter" || track === "deep" ? track : null;
+  })();
+  useEffect(() => {
+    if (trackFromQuery) {
+      setPendingTrack(trackFromQuery);
+      setActiveOrderflowTrack(trackFromQuery);
+    }
+  }, [trackFromQuery]);
   useEffect(() => {
     fetch("/api/public-stats").then(r => r.ok ? r.json() : null).then(d => {
       if (d?.totalUsers) setUserCount(d.totalUsers);
@@ -23,14 +37,26 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (!isLoading && user) {
-      navigate("/home");
+      navigate(trackFromQuery ? "/intake" : "/home");
     }
-  }, [user, isLoading, navigate]);
+  }, [user, isLoading, navigate, trackFromQuery]);
 
   const handleLoginSuccess = () => {
     setShowLogin(false);
     queryClient.invalidateQueries({ queryKey: ["/api/me"] });
-    navigate("/home");
+    navigate(pendingTrack ? "/intake" : "/home");
+  };
+
+  const handleTrackStart = (trackId: DiagnosticTrackId) => {
+    setActiveOrderflowTrack(trackId);
+    setPendingTrack(trackId);
+
+    if (user) {
+      navigate("/intake");
+      return;
+    }
+
+    setShowLogin(true);
   };
 
   if (isLoading) {
@@ -80,11 +106,11 @@ export default function LandingPage() {
             style={{ color: 'var(--text-strong)' }}
             data-testid="text-title"
           >
-            交易能力测评
+            订单流交易诊断
           </h1>
           <p className="text-sm md:text-base leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-            2分钟 · 12道实战情境题<br />
-            发现你的交易 DNA
+            先注册登录，再选择浅测或深测<br />
+            解锁资料、报告和销售跟进路径
           </p>
         </motion.div>
 
@@ -99,20 +125,49 @@ export default function LandingPage() {
               ✨ 已有 <span className="font-bold" style={{ color: 'var(--primary)' }}>{userCount.toLocaleString()}</span> 位交易者完成测评
             </p>
           )}
-          <motion.button
-            onClick={() => navigate("/intake")}
-            whileHover={{ scale: 1.02, y: -2 }}
-            whileTap={{ scale: 0.98 }}
-            className="w-full h-12 md:h-[52px] rounded-xl font-bold text-base text-white flex items-center justify-center gap-2 transition-all duration-200"
-            style={{ background: 'var(--primary)' }}
-            data-testid="button-start-quiz"
-          >
-            开始测评
-            <ChevronRight className="w-4 h-4" />
-          </motion.button>
+          <div className="grid gap-3">
+            <motion.button
+              onClick={() => handleTrackStart("starter")}
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full rounded-xl px-4 py-4 text-left transition-all duration-200"
+              style={{ background: 'var(--primary)', color: '#fff' }}
+              data-testid="button-start-starter"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-base font-bold">浅度测评</div>
+                  <div className="text-xs mt-1 opacity-80">2-3 分钟，先判断你是否适合订单流路径</div>
+                </div>
+                <ChevronRight className="w-4 h-4" />
+              </div>
+            </motion.button>
+
+            <motion.button
+              onClick={() => handleTrackStart("deep")}
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full rounded-xl px-4 py-4 text-left transition-all duration-200"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', color: 'var(--text-strong)' }}
+              data-testid="button-start-deep"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-base font-bold">深度测评</div>
+                  <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                    5-8 分钟，生成适配度报告、标签和解锁资料
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4" />
+              </div>
+            </motion.button>
+          </div>
 
           <motion.button
-            onClick={() => setShowLogin(true)}
+            onClick={() => {
+              setPendingTrack(null);
+              setShowLogin(true);
+            }}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className="w-full h-11 md:h-12 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all duration-200"
@@ -147,9 +202,9 @@ export default function LandingPage() {
         open={showLogin}
         onClose={() => setShowLogin(false)}
         onSuccess={handleLoginSuccess}
-        title="登录"
-        subtitle="登录后进入你的交易员主页"
-        defaultTab="login"
+        title="注册 / 登录后开始诊断"
+        subtitle={pendingTrack ? (pendingTrack === "deep" ? "登录后进入深度测评" : "登录后进入浅度测评") : "登录后进入你的交易员主页"}
+        defaultTab={pendingTrack ? "register" : "login"}
       />
     </div>
   );

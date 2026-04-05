@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertUserSchema, loginSchema, insertEventSchema, insertSalesContactSchema } from "@shared/schema";
+import { buildWechatContactPayload, DEFAULT_WECHAT_CONTACT, DEFAULT_WECHAT_CONTACT_URL } from "@shared/wechatContact";
 import { sendRegistrationNotification, sendResultNotification, sendContactAlertNotification } from "./webhook";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -9,6 +10,8 @@ import { pool, db } from "./db";
 import { sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { getAdminStats, getExternalStats } from "./stats";
+import { filterAdminUsers } from "./adminUsers";
+import { buildAdminSalesPoolStats } from "./adminSalesPoolStats";
 
 let salesCounter = 0;
 
@@ -61,7 +64,7 @@ async function checkContactAlive(url: string, skipCache = false): Promise<boolea
 async function getAliveContacts(): Promise<{ contacts: { name: string; url: string }[]; allDead: boolean }> {
   const allContacts = await storage.getEnabledSalesContacts();
   if (allContacts.length === 0) {
-    return { contacts: [{ name: "Deven", url: "https://work.weixin.qq.com/ca/cawcde66939ac2ab81" }], allDead: true };
+    return { contacts: [{ ...DEFAULT_WECHAT_CONTACT }], allDead: true };
   }
   const results = await Promise.all(
     allContacts.map(async (c) => ({
@@ -109,8 +112,8 @@ async function runHealthMonitor() {
 }
 
 const DEFAULT_CONTACTS = [
-  { name: "默认顾问", url: "https://work.weixin.qq.com/ca/cawcde75d99eb3fce4" },
-  { name: "Deven", url: "https://work.weixin.qq.com/ca/cawcde66939ac2ab81" },
+  { name: "默认顾问", url: DEFAULT_WECHAT_CONTACT_URL },
+  { name: "Deven", url: DEFAULT_WECHAT_CONTACT_URL },
   { name: "Anna", url: "https://work.weixin.qq.com/ca/cawcde2d7a8f8a7ac3" },
 ];
 
@@ -148,6 +151,52 @@ export async function registerRoutes(
       },
     })
   );
+
+  async function loadAdminUsersSnapshot() {
+    const result = await db.execute(sql`
+      SELECT
+        u.id,
+        u.phone,
+        u.nickname,
+        u.wechat_id,
+        u.source,
+        u.tags,
+        u.tier,
+        u.login_days,
+        u.last_login_date,
+        u.last_active_at,
+        u.created_at,
+        q.trader_type_code,
+        q.avg_score,
+        q.rank_name,
+        q.scores,
+        q.created_at AS quiz_completed_at
+      FROM users u
+      LEFT JOIN LATERAL (
+        SELECT * FROM quiz_results WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1
+      ) q ON true
+      ORDER BY u.created_at DESC
+    `);
+
+    return (result.rows || result || []) as Array<{
+      id: number;
+      phone: string;
+      nickname: string | null;
+      wechat_id: string | null;
+      source: string | null;
+      tags: unknown;
+      tier: number;
+      login_days: number;
+      last_login_date: string | null;
+      last_active_at: string | null;
+      created_at: string | null;
+      trader_type_code: string | null;
+      avg_score: number | null;
+      rank_name: string | null;
+      scores: unknown;
+      quiz_completed_at: string | null;
+    }>;
+  }
 
   app.post("/api/register", async (req, res) => {
     try {
@@ -328,9 +377,10 @@ export async function registerRoutes(
       }
 
       const { answers, scores, traderTypeCode, avgScore, rankName } = req.body;
+      const isOrderflowSubmission = typeof traderTypeCode === "string" && traderTypeCode.startsWith("OF_");
 
-      if (!Array.isArray(answers) || answers.length !== 12) {
-        return res.status(400).json({ message: "answers 必须是12个选项的数组" });
+      if (!Array.isArray(answers) || answers.length < 1) {
+        return res.status(400).json({ message: "answers 必须是非空数组" });
       }
       if (!scores || typeof scores !== 'object') {
         return res.status(400).json({ message: "scores 必须是对象" });
@@ -343,6 +393,12 @@ export async function registerRoutes(
       }
       if (typeof rankName !== 'string' || rankName.length < 1) {
         return res.status(400).json({ message: "rankName 无效" });
+      }
+      if (isOrderflowSubmission) {
+        const scoreData = scores as Record<string, unknown>;
+        if (scoreData.mode !== "orderflow-diagnostic") {
+          return res.status(400).json({ message: "订单流诊断 scores.mode 无效" });
+        }
       }
 
       const existing = await storage.getLatestQuizResult(userId);
@@ -365,7 +421,9 @@ export async function registerRoutes(
         userId,
         sessionId: req.body.sessionId || "server",
         eventType: "quiz_complete",
-        eventData: { traderTypeCode, avgScore, rankName },
+        eventData: isOrderflowSubmission
+          ? { traderTypeCode, avgScore, rankName, mode: "orderflow-diagnostic", trackId: (scores as any)?.trackId || null }
+          : { traderTypeCode, avgScore, rankName },
       });
 
       res.json({ success: true, id: result.id, shareToken: result.shareToken });
@@ -525,8 +583,11 @@ export async function registerRoutes(
 
   app.post("/api/webhook/result", async (req, res) => {
     try {
-      const { phone, wechatName, scores, traderType, rank, avgScore, salesStrategy, verifyCode } = req.body;
-      if (!phone || !traderType) {
+      const { phone } = req.body;
+      const isLegacyPayload = !!req.body?.traderType;
+      const isOrderflowPayload = !!req.body?.selectedTrack;
+
+      if (!phone || (!isLegacyPayload && !isOrderflowPayload)) {
         return res.status(400).json({ message: "缺少必要字段" });
       }
 
@@ -541,7 +602,47 @@ export async function registerRoutes(
         }
       }
 
-      sendResultNotification({ phone, wechatName, scores, traderType, rank, avgScore, salesStrategy, reportUrl, verifyCode });
+      if (isLegacyPayload) {
+        const { wechatName, scores, traderType, rank, avgScore, salesStrategy, verifyCode } = req.body;
+        sendResultNotification({ phone, wechatName, scores, traderType, rank, avgScore, salesStrategy, reportUrl, verifyCode });
+      } else {
+        const salesPoolSnapshot = buildAdminSalesPoolStats(await loadAdminUsersSnapshot());
+        const {
+          wechatName,
+          selectedTrack,
+          scoreBand,
+          dimensionScores,
+          segmentTags,
+          unlockRewards,
+          recommendedAction,
+          recommendedPath,
+          systemMapping,
+          salesPlaybook,
+          customerProfile,
+          userSummary,
+          salesSummary,
+          verifyCode,
+        } = req.body;
+        sendResultNotification({
+          phone,
+          wechatName,
+          selectedTrack,
+          scoreBand,
+          dimensionScores,
+          segmentTags,
+          unlockRewards,
+          recommendedAction,
+          recommendedPath,
+          systemMapping,
+          salesPlaybook,
+          customerProfile,
+          userSummary,
+          salesSummary,
+          salesPoolSnapshot,
+          reportUrl,
+          verifyCode,
+        });
+      }
       res.json({ success: true });
     } catch (err) {
       console.error("Result webhook error:", err);
@@ -567,13 +668,12 @@ export async function registerRoutes(
     }
   });
 
-  // 企业微信跳转已暂停 —— 多个企业微信因跳转被封号
   app.get("/api/wechat-contact", async (_req, res) => {
-    res.json({ disabled: true, message: "企业微信顾问服务暂停中" });
+    res.json(buildWechatContactPayload());
   });
 
   app.post("/api/wechat-contact/switch", async (_req, res) => {
-    res.json({ disabled: true, message: "企业微信顾问服务暂停中" });
+    res.json(buildWechatContactPayload());
   });
 
   // ===== 客服 Agent 独立登录系统 =====
@@ -744,33 +844,31 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/users", requireAdmin, async (_req, res) => {
+  app.get("/api/admin/users/pools", requireAdmin, async (_req, res) => {
     try {
-      const result = await db.execute(sql`
-        SELECT
-          u.id,
-          u.phone,
-          u.nickname,
-          u.wechat_id,
-          u.source,
-          u.tags,
-          u.tier,
-          u.login_days,
-          u.last_login_date,
-          u.last_active_at,
-          u.created_at,
-          q.trader_type_code,
-          q.avg_score,
-          q.rank_name,
-          q.scores,
-          q.created_at AS quiz_completed_at
-        FROM users u
-        LEFT JOIN LATERAL (
-          SELECT * FROM quiz_results WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1
-        ) q ON true
-        ORDER BY u.created_at DESC
-      `);
-      res.json(result.rows || result || []);
+      const rawRows = await loadAdminUsersSnapshot();
+      res.json(buildAdminSalesPoolStats(rawRows));
+    } catch (err) {
+      console.error("[admin] sales pools error:", err);
+      res.status(500).json({ message: "获取销售池统计失败" });
+    }
+  });
+
+  app.get("/api/admin/users", requireAdmin, async (req, res) => {
+    try {
+      const rawRows = await loadAdminUsersSnapshot();
+      const page = Number.parseInt(String(req.query.page ?? "1"), 10);
+      const pageSize = Number.parseInt(String(req.query.pageSize ?? "20"), 10);
+      const filtered = filterAdminUsers(rawRows, {
+        search: typeof req.query.search === "string" ? req.query.search : "",
+        stage: typeof req.query.stage === "string" ? req.query.stage : "",
+        payment: typeof req.query.payment === "string" ? req.query.payment : "",
+        path: typeof req.query.path === "string" ? req.query.path : "",
+        tag: typeof req.query.tag === "string" ? req.query.tag : "",
+        page,
+        pageSize,
+      });
+      res.json(filtered);
     } catch (err) {
       console.error("[admin] users error:", err);
       res.status(500).json({ message: "获取用户列表失败" });

@@ -6,6 +6,7 @@ import { Camera, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeCanvas } from "qrcode.react";
 import { useToast } from "@/hooks/use-toast";
+import { buildSurveyEntryUrl } from "@/utils/diagnosticLinks";
 
 interface ShareCardProps {
   result: QuizResult;
@@ -22,6 +23,7 @@ export default function ShareCard({ result, tier = 0 }: ShareCardProps) {
   const { toast } = useToast();
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const surveyEntryUrl = buildSurveyEntryUrl();
 
   const handleSave = useCallback(async () => {
     if (!cardRef.current) return;
@@ -150,7 +152,7 @@ export default function ShareCard({ result, tier = 0 }: ShareCardProps) {
             </p>
           </div>
           <div style={{ background: "#fff", borderRadius: "6px", padding: "4px", flexShrink: 0 }}>
-            <QRCodeCanvas value="https://dptest.org" size={56} level="M" bgColor="#ffffff" fgColor="#0D0F14" />
+            <QRCodeCanvas value={surveyEntryUrl} size={56} level="M" bgColor="#ffffff" fgColor="#0D0F14" />
           </div>
         </div>
       </div>

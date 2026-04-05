@@ -37,7 +37,7 @@ SESSION_SECRET=用下面命令生成
 ADMIN_PASSWORD=你的管理后台密码
 EXTERNAL_API_KEY=你的API密钥（可选）
 BASE_URL=https://test.deltapex.cn
-WECHAT_WEBHOOK_URL=（可选）
+WECHAT_WEBHOOK_URL=企业微信群机器人 Webhook（可选，未设置则不推送）
 ```
 
 生成 SESSION_SECRET：

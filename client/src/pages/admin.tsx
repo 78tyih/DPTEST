@@ -3,7 +3,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Lock, Plus, Trash2, Activity, Power, PowerOff, RefreshCw, Shield, ArrowLeft, X, BarChart3, Eye, UserPlus, MessageSquare, Users, TrendingUp, Pencil, Check, Clock, Copy, Search, Download, Phone, User, ChevronRight, Target, Lightbulb, AlertTriangle, Zap } from "lucide-react";
 import { traderTypes, rankTiers } from "@/data/traderTypes";
 import { dimensionLabels, type Dimension } from "@/data/questions";
+import { diagnosticDimensionLabels, type DiagnosticDimension } from "@/data/orderflowDiagnostic";
 import { useToast } from "@/hooks/use-toast";
+import { deriveAdminOrderflowSummary } from "@/utils/orderflowAdmin";
+import {
+  adminSalesPoolPresets,
+  buildAdminSalesPoolQueryPatch,
+  isAdminSalesPoolActive,
+} from "@/utils/adminSalesPools";
 
 interface SalesContact {
   id: number;
@@ -97,8 +104,47 @@ interface AdminUser {
   trader_type_code: string | null;
   avg_score: number | null;
   rank_name: string | null;
-  scores: Record<string, number> | null;
+  scores: unknown;
   quiz_completed_at: string | null;
+}
+
+interface AdminUsersResponse {
+  items: AdminUser[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  availableStages: string[];
+  availablePayments: string[];
+  availablePaths: string[];
+  availableTags: string[];
+}
+
+interface AdminSalesPoolCard {
+  key: string;
+  label: string;
+  description: string;
+  total: number;
+  todayNew: number;
+  pendingFollowUp: number;
+}
+
+interface AdminSalesPoolPendingUser {
+  id: number;
+  phone: string;
+  nickname: string | null;
+  traderStageLabel: string;
+  paymentIntentLabel: string;
+  recommendedPath: string;
+  poolLabels: string[];
+  quizCompletedAt: string | null;
+  createdAt: string | null;
+  followStatus: string;
+}
+
+interface AdminSalesPoolStatsResponse {
+  cards: AdminSalesPoolCard[];
+  pendingUsers: AdminSalesPoolPendingUser[];
 }
 
 const TRADER_TYPE_NAMES: Record<string, string> = {
@@ -420,6 +466,7 @@ function StatsPanel({ stats, loading }: { stats: StatsData | null; loading: bool
 const TIER_NAMES: Record<number, string> = { 0: "学徒", 1: "交易者", 2: "精英", 3: "职业操盘手" };
 
 const DIMENSION_KEYS: Dimension[] = ['EDGE', 'EXEC', 'RISK', 'ADAPT', 'MENTAL', 'SYSTEM'];
+const ORDERFLOW_DIMENSION_KEYS: DiagnosticDimension[] = ['awareness', 'market-fit', 'risk-control', 'execution', 'tool-readiness', 'commercial-intent'];
 
 // 每种交易者类型对应的销售切入策略
 const SALES_STRATEGIES: Record<string, { opener: string; painPoint: string; courseValue: string; reminder: string }> = {
@@ -561,7 +608,9 @@ function ScoreBar({ label, score, color }: { label: string; score: number; color
 
 function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; onClose: () => void; onTagsUpdate?: (userId: number, tags: UserTags) => void }) {
   const { toast } = useToast();
-  const scores = user.scores;
+  const diagnosticSummary = deriveAdminOrderflowSummary(user.scores);
+  const scores = diagnosticSummary.mode === "legacy" ? diagnosticSummary.dimensionScores : null;
+  const orderflowScores = diagnosticSummary.mode === "orderflow" ? diagnosticSummary.dimensionScores : null;
   const typeCode = user.trader_type_code;
   const typeInfo = typeCode ? traderTypes[typeCode] : null;
   const strategy = typeCode ? SALES_STRATEGIES[typeCode] : null;
@@ -604,13 +653,18 @@ function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; on
     const lines: string[] = [];
     lines.push(`【${user.phone}】`);
     if (typeInfo) lines.push(`${typeInfo.icon} ${typeInfo.name}（${typeInfo.subtitle}）`);
+    if (diagnosticSummary.mode === "orderflow") {
+      if (diagnosticSummary.traderStageLabel) lines.push(`交易阶段：${diagnosticSummary.traderStageLabel}`);
+      if (diagnosticSummary.paymentIntentLabel) lines.push(`付费意向：${diagnosticSummary.paymentIntentLabel}`);
+      if (diagnosticSummary.recommendedPath) lines.push(`推荐路径：${diagnosticSummary.recommendedPath}`);
+    }
     if (user.avg_score != null && rank) lines.push(`${rank.icon} ${rank.name} ${user.avg_score}分`);
     if (strongest && weakest) lines.push(`强项：${strongest.label}${strongest.score} / 弱项：${weakest.label}${weakest.score}`);
     if (typeInfo) lines.push(`痛点：${typeInfo.piercingDescription.substring(0, 50)}...`);
     if (strategy) lines.push(`切入：${strategy.opener.substring(0, 40)}...`);
     if (notes) lines.push(`备注：${notes}`);
     return lines.join('\n');
-  }, [user, typeInfo, rank, strongest, weakest, strategy, notes]);
+  }, [user, typeInfo, diagnosticSummary, rank, strongest, weakest, strategy, notes]);
 
   const copyBrief = useCallback(async () => {
     const text = generateWechatNote();
@@ -718,6 +772,42 @@ function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; on
             </div>
           </div>
 
+          {diagnosticSummary.mode === "orderflow" && (
+            <div className="rounded-xl p-4" style={{ background: 'rgba(var(--primary-rgb), 0.08)', border: '1px solid rgba(var(--primary-rgb), 0.16)' }}>
+              <div className="flex items-center gap-2 mb-3">
+                <Zap className="w-4 h-4" style={{ color: 'var(--primary)' }} />
+                <span className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>订单流诊断标签</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm mb-3">
+                <div>
+                  <p style={{ color: 'var(--text-muted)' }}>交易阶段</p>
+                  <p style={{ color: 'var(--text-strong)' }}>{diagnosticSummary.traderStageLabel || '-'}</p>
+                </div>
+                <div>
+                  <p style={{ color: 'var(--text-muted)' }}>付费意向</p>
+                  <p style={{ color: 'var(--text-strong)' }}>{diagnosticSummary.paymentIntentLabel || '-'}</p>
+                </div>
+              </div>
+              <div className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
+                推荐路径：
+                <span style={{ color: 'var(--text-strong)' }}> {diagnosticSummary.recommendedPath || '-'}</span>
+              </div>
+              {diagnosticSummary.segmentTagLabels.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {diagnosticSummary.segmentTagLabels.map((label) => (
+                    <span
+                      key={label}
+                      className="text-xs px-2 py-1 rounded-full"
+                      style={{ background: 'rgba(var(--gold-rgb), 0.12)', color: 'var(--gold)' }}
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 跟进状态 + 备注 */}
           <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
             <div className="flex items-center gap-2 mb-3">
@@ -776,7 +866,7 @@ function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; on
           )}
 
           {/* 六维评分 */}
-          {scores && (
+          {(scores || orderflowScores) && (
             <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
               <div className="flex items-center gap-2 mb-3">
                 <BarChart3 className="w-4 h-4" style={{ color: 'var(--gold)' }} />
@@ -788,8 +878,16 @@ function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; on
                 )}
               </div>
               <div className="space-y-2.5">
-                {DIMENSION_KEYS.map(k => (
+                {scores && DIMENSION_KEYS.map(k => (
                   <ScoreBar key={k} label={dimensionLabels[k]} score={scores[k] ?? 0} color={getScoreColor(scores[k] ?? 0)} />
+                ))}
+                {orderflowScores && ORDERFLOW_DIMENSION_KEYS.map((key) => (
+                  <ScoreBar
+                    key={key}
+                    label={diagnosticDimensionLabels[key]}
+                    score={orderflowScores[key] ?? 0}
+                    color={getScoreColor(orderflowScores[key] ?? 0)}
+                  />
                 ))}
               </div>
             </div>
@@ -896,23 +994,39 @@ function UserDetailDrawer({ user, onClose, onTagsUpdate }: { user: AdminUser; on
   );
 }
 
-function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading: boolean; onRefresh: () => void }) {
+function UsersPanel({
+  users,
+  loading,
+  onRefresh,
+  total,
+  page,
+  totalPages,
+  availableStages,
+  availablePayments,
+  availableTags,
+  query,
+  onQueryChange,
+}: {
+  users: AdminUser[];
+  loading: boolean;
+  onRefresh: () => void;
+  total: number;
+  page: number;
+  totalPages: number;
+  availableStages: string[];
+  availablePayments: string[];
+  availableTags: string[];
+  query: { search: string; stage: string; payment: string; path: string; tag: string };
+  onQueryChange: (patch: Partial<{ search: string; stage: string; payment: string; path: string; tag: string; page: number }>) => void;
+}) {
   const { toast } = useToast();
-  const [search, setSearch] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
 
-  const filtered = users.filter(u => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      u.phone.includes(q) ||
-      (u.nickname && u.nickname.toLowerCase().includes(q)) ||
-      (u.wechat_id && u.wechat_id.toLowerCase().includes(q)) ||
-      (u.trader_type_code && (TRADER_TYPE_NAMES[u.trader_type_code] || u.trader_type_code).toLowerCase().includes(q))
-    );
-  });
-
+  const enrichedUsers = users.map((user) => ({
+    user,
+    diagnosticSummary: deriveAdminOrderflowSummary(user.scores),
+  }));
   const copyText = useCallback(async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -947,14 +1061,19 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
       ADAPT: "市场适应", MENTAL: "交易心理", SYSTEM: "系统思维",
     };
     const DIMENSIONS = ["EDGE", "EXEC", "RISK", "ADAPT", "MENTAL", "SYSTEM"];
-    const getWeakest = (scores: Record<string, number> | null) => {
-      if (!scores) return "";
-      const entries = DIMENSIONS.map(d => [d, scores[d] ?? 999] as const);
+    const getWeakest = (summary: ReturnType<typeof deriveAdminOrderflowSummary>) => {
+      if (!summary.dimensionScores) return "";
+      if (summary.mode === "orderflow") {
+        const entries = ORDERFLOW_DIMENSION_KEYS.map((key) => [key, summary.dimensionScores?.[key] ?? 999] as const);
+        const min = entries.reduce((a, b) => a[1] <= b[1] ? a : b);
+        return diagnosticDimensionLabels[min[0]];
+      }
+      const entries = DIMENSIONS.map(d => [d, summary.dimensionScores?.[d] ?? 999] as const);
       const min = entries.reduce((a, b) => a[1] <= b[1] ? a : b);
       return DIMENSION_NAMES[min[0]] || min[0];
     };
-    const header = "ID,手机号,昵称,微信号,来源,交易品种,具体标的,资金体量,交易时长,交易体系,阶段,登录天数,交易者类型,综合评分,认知格局,执行力,风险管理,市场适应,交易心理,系统思维,薄弱维度,注册时间,测评时间,最后活跃";
-    const rows = filtered.map(u => [
+    const header = "ID,手机号,昵称,微信号,来源,交易品种,具体标的,资金体量,交易时长,交易体系,阶段,登录天数,交易者类型,综合评分,交易阶段,付费意向,推荐路径,认知格局,执行力,风险管理,市场适应,交易心理,系统思维,薄弱维度,注册时间,测评时间,最后活跃";
+    const rows = enrichedUsers.map(({ user: u, diagnosticSummary }) => [
       u.id,
       escapeCSV(u.phone),
       escapeCSV(u.nickname),
@@ -969,13 +1088,16 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
       u.login_days,
       escapeCSV(u.trader_type_code ? (TRADER_TYPE_NAMES[u.trader_type_code] || u.trader_type_code) : ""),
       u.avg_score ?? "",
-      u.scores?.EDGE ?? "",
-      u.scores?.EXEC ?? "",
-      u.scores?.RISK ?? "",
-      u.scores?.ADAPT ?? "",
-      u.scores?.MENTAL ?? "",
-      u.scores?.SYSTEM ?? "",
-      escapeCSV(getWeakest(u.scores)),
+      escapeCSV(diagnosticSummary.traderStageLabel),
+      escapeCSV(diagnosticSummary.paymentIntentLabel),
+      escapeCSV(diagnosticSummary.recommendedPath),
+      diagnosticSummary.dimensionScores?.EDGE ?? "",
+      diagnosticSummary.dimensionScores?.EXEC ?? "",
+      diagnosticSummary.dimensionScores?.RISK ?? "",
+      diagnosticSummary.dimensionScores?.ADAPT ?? "",
+      diagnosticSummary.dimensionScores?.MENTAL ?? "",
+      diagnosticSummary.dimensionScores?.SYSTEM ?? "",
+      escapeCSV(getWeakest(diagnosticSummary)),
       u.created_at ? new Date(u.created_at).toLocaleDateString("zh-CN") : "",
       u.quiz_completed_at ? new Date(u.quiz_completed_at).toLocaleDateString("zh-CN") : "",
       u.last_active_at ? new Date(u.last_active_at).toLocaleDateString("zh-CN") : "",
@@ -988,8 +1110,8 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
     a.download = `客户资料_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast({ title: `已导出 ${filtered.length} 条记录` });
-  }, [filtered, toast]);
+    toast({ title: `已导出 ${enrichedUsers.length} 条记录` });
+  }, [enrichedUsers, toast]);
 
   const formatDate = (d: string | null) => {
     if (!d) return "-";
@@ -1006,19 +1128,74 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
 
   return (
     <div className="space-y-3" data-testid="users-panel">
-      <div className="flex items-center gap-2">
-        <div className="flex-1 relative">
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {adminSalesPoolPresets.map((preset) => {
+          const active = isAdminSalesPoolActive(preset.key, query);
+          return (
+            <button
+              key={preset.key}
+              onClick={() => onQueryChange(buildAdminSalesPoolQueryPatch(preset.key))}
+              className="px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-colors"
+              style={{
+                background: active ? 'rgba(var(--gold-rgb), 0.14)' : 'rgba(255,255,255,0.03)',
+                color: active ? 'var(--gold)' : 'var(--text-muted)',
+                border: `1px solid ${active ? 'rgba(var(--gold-rgb), 0.3)' : 'var(--border)'}`,
+              }}
+              title={preset.description}
+              data-testid={`button-sales-pool-${preset.key}`}
+            >
+              {preset.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="basis-full relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
           <input
             type="text"
             placeholder="搜索手机号 / 昵称 / 微信号"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            value={query.search}
+            onChange={e => onQueryChange({ search: e.target.value, page: 1 })}
             className="w-full pl-9 pr-3 py-2 rounded-xl text-xs outline-none"
             style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: 'var(--text-strong)' }}
             data-testid="input-search-users"
           />
         </div>
+        <select
+          value={query.stage}
+          onChange={(e) => onQueryChange({ stage: e.target.value, page: 1 })}
+          className="px-3 py-2 rounded-xl text-xs outline-none"
+          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: 'var(--text-strong)' }}
+        >
+          <option value="all">全部阶段</option>
+          {availableStages.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+        <select
+          value={query.payment}
+          onChange={(e) => onQueryChange({ payment: e.target.value, page: 1 })}
+          className="px-3 py-2 rounded-xl text-xs outline-none"
+          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: 'var(--text-strong)' }}
+        >
+          <option value="all">全部意向</option>
+          {availablePayments.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+        <select
+          value={query.tag}
+          onChange={(e) => onQueryChange({ tag: e.target.value, page: 1 })}
+          className="px-3 py-2 rounded-xl text-xs outline-none"
+          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: 'var(--text-strong)' }}
+        >
+          <option value="all">全部标签</option>
+          {availableTags.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
         <button
           onClick={exportCSV}
           className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-medium shrink-0"
@@ -1031,7 +1208,7 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
       </div>
 
       <div className="text-xs flex items-center justify-between" style={{ color: 'var(--text-muted)' }}>
-        <span>共 {filtered.length} 位客户{search && ` (筛选自 ${users.length})`}</span>
+        <span>共 {total} 位客户{(query.search || query.stage !== "all" || query.payment !== "all" || query.path !== "all" || query.tag !== "all") && ` · 当前第 ${page}/${totalPages} 页`}</span>
         <button onClick={onRefresh} disabled={loading} className="flex items-center gap-1" data-testid="button-refresh-users">
           <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
           刷新
@@ -1039,12 +1216,12 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
       </div>
 
       <div className="space-y-2">
-        {filtered.length === 0 ? (
+        {enrichedUsers.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{search ? "未找到匹配客户" : "暂无客户数据"}</p>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{query.search ? "未找到匹配客户" : "暂无客户数据"}</p>
           </div>
         ) : (
-          filtered.map(u => {
+          enrichedUsers.map(({ user: u, diagnosticSummary }) => {
             const uType = u.trader_type_code ? traderTypes[u.trader_type_code] : null;
             return (
             <div
@@ -1052,7 +1229,7 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
               className="rounded-xl p-3 cursor-pointer transition-all active:scale-[0.98]"
               style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}
               data-testid={`user-card-${u.id}`}
-              onClick={() => u.trader_type_code && setSelectedUser(u)}
+              onClick={() => (u.trader_type_code || diagnosticSummary.mode === "orderflow") && setSelectedUser(u)}
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -1092,18 +1269,52 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
                 </div>
               </div>
 
-              <div className="space-y-1.5 ml-10">
+                <div className="space-y-1.5 ml-10">
                 <CopyRow icon={<Phone className="w-3 h-3" />} label="手机" value={u.phone} onCopy={copyText} copiedId={copiedId} />
                 {u.wechat_id && (
                   <CopyRow icon={<MessageSquare className="w-3 h-3" />} label="微信" value={u.wechat_id} onCopy={copyText} copiedId={copiedId} />
                 )}
-                {u.scores && (
+                {(diagnosticSummary.traderStageLabel || diagnosticSummary.paymentIntentLabel || diagnosticSummary.recommendedPath) && (
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    {diagnosticSummary.traderStageLabel && (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(var(--gold-rgb), 0.12)', color: 'var(--gold)' }}>
+                        {diagnosticSummary.traderStageLabel}
+                      </span>
+                    )}
+                    {diagnosticSummary.paymentIntentLabel && (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(var(--primary-rgb), 0.12)', color: 'var(--primary)' }}>
+                        {diagnosticSummary.paymentIntentLabel}
+                      </span>
+                    )}
+                    {diagnosticSummary.recommendedPath && (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }}>
+                        {diagnosticSummary.recommendedPath}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {diagnosticSummary.dimensionScores && diagnosticSummary.mode === "legacy" && (
                   <div className="flex items-center gap-1.5 mt-1.5">
                     {DIMENSION_KEYS.map(k => {
-                      const s = u.scores![k] ?? 0;
+                      const s = diagnosticSummary.dimensionScores![k] ?? 0;
                       const color = s >= 70 ? '#07C160' : s >= 50 ? '#F59E0B' : '#EF4444';
                       return (
                         <div key={k} className="flex-1">
+                          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                            <div className="h-full rounded-full" style={{ background: color, width: `${s}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {diagnosticSummary.dimensionScores && diagnosticSummary.mode === "orderflow" && (
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    {ORDERFLOW_DIMENSION_KEYS.map((key) => {
+                      const s = diagnosticSummary.dimensionScores![key] ?? 0;
+                      const color = s >= 70 ? '#07C160' : s >= 50 ? '#F59E0B' : '#EF4444';
+                      return (
+                        <div key={key} className="flex-1">
                           <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
                             <div className="h-full rounded-full" style={{ background: color, width: `${s}%` }} />
                           </div>
@@ -1128,6 +1339,30 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
           )}
       </div>
 
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <button
+            onClick={() => onQueryChange({ page: page - 1 })}
+            disabled={page <= 1 || loading}
+            className="px-3 py-2 rounded-xl text-xs"
+            style={{ background: 'rgba(255,255,255,0.04)', color: page <= 1 ? 'rgba(255,255,255,0.3)' : 'var(--text-strong)' }}
+          >
+            上一页
+          </button>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            第 {page} / {totalPages} 页
+          </span>
+          <button
+            onClick={() => onQueryChange({ page: page + 1 })}
+            disabled={page >= totalPages || loading}
+            className="px-3 py-2 rounded-xl text-xs"
+            style={{ background: 'rgba(255,255,255,0.04)', color: page >= totalPages ? 'rgba(255,255,255,0.3)' : 'var(--text-strong)' }}
+          >
+            下一页
+          </button>
+        </div>
+      )}
+
       <AnimatePresence>
         {selectedUser && (
           <UserDetailDrawer
@@ -1135,10 +1370,141 @@ function UsersPanel({ users, loading, onRefresh }: { users: AdminUser[]; loading
             onClose={() => setSelectedUser(null)}
             onTagsUpdate={(userId, tags) => {
               setSelectedUser(prev => prev && prev.id === userId ? { ...prev, tags } : prev);
+              onRefresh();
             }}
           />
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function SalesPoolSummaryPanel({
+  stats,
+  loading,
+  query,
+  onSelectPool,
+  onRefresh,
+}: {
+  stats: AdminSalesPoolStatsResponse | null;
+  loading: boolean;
+  query: { search: string; stage: string; payment: string; path: string; tag: string };
+  onSelectPool: (key: string) => void;
+  onRefresh: () => void;
+}) {
+  const formatDate = (value: string | null) => {
+    if (!value) return "-";
+    return new Date(value).toLocaleDateString("zh-CN", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  return (
+    <div className="space-y-3 mb-4">
+      <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>销售池总览</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>只统计已完成订单流诊断的客户，卡片可直接跳转筛选。</p>
+          </div>
+          <button onClick={onRefresh} disabled={loading} className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+            刷新
+          </button>
+        </div>
+
+        {loading && !stats ? (
+          <div className="text-center py-8">
+            <div className="w-6 h-6 mx-auto rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
+          </div>
+        ) : stats ? (
+          <div className="grid grid-cols-2 gap-2">
+            {stats.cards.map((card) => {
+              const active = isAdminSalesPoolActive(card.key, query);
+              return (
+                <button
+                  key={card.key}
+                  onClick={() => onSelectPool(card.key)}
+                  className="text-left rounded-xl p-3 transition-colors"
+                  style={{
+                    background: active ? 'rgba(var(--gold-rgb), 0.12)' : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${active ? 'rgba(var(--gold-rgb), 0.28)' : 'var(--border)'}`,
+                  }}
+                  data-testid={`card-sales-pool-${card.key}`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium" style={{ color: active ? 'var(--gold)' : 'var(--text-strong)' }}>{card.label}</span>
+                    <span className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>{card.total}</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed mb-2" style={{ color: 'var(--text-muted)' }}>{card.description}</p>
+                  <div className="flex items-center gap-3 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                    <span>今日新增 {card.todayNew}</span>
+                    <span>待跟进 {card.pendingFollowUp}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-6">
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>暂无销售池统计</p>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-2 mb-3">
+          <Clock className="w-4 h-4" style={{ color: 'var(--primary)' }} />
+          <div>
+            <p className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>待跟进客户</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>默认展示最近待跟进的 8 位客户，便于销售优先处理。</p>
+          </div>
+        </div>
+
+        {!stats || stats.pendingUsers.length === 0 ? (
+          <div className="text-center py-4">
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>当前没有待跟进客户</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {stats.pendingUsers.map((user) => (
+              <div
+                key={user.id}
+                className="rounded-xl p-3"
+                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}
+                data-testid={`pending-user-${user.id}`}
+              >
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>{user.nickname || user.phone}</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                      测评 {formatDate(user.quizCompletedAt || user.createdAt)}
+                    </p>
+                  </div>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(59,130,246,0.18)', color: '#60A5FA' }}>
+                    待跟进
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {user.poolLabels.map((label) => (
+                    <span key={label} className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(var(--gold-rgb), 0.12)', color: 'var(--gold)' }}>
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                <div className="text-[11px] flex flex-wrap gap-3" style={{ color: 'var(--text-muted)' }}>
+                  {user.traderStageLabel && <span>{user.traderStageLabel}</span>}
+                  {user.paymentIntentLabel && <span>{user.paymentIntentLabel}</span>}
+                  {user.recommendedPath && <span>{user.recommendedPath}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1581,7 +1947,24 @@ export default function AdminPage() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [adminUsersTotal, setAdminUsersTotal] = useState(0);
+  const [adminUsersPage, setAdminUsersPage] = useState(1);
+  const [adminUsersTotalPages, setAdminUsersTotalPages] = useState(1);
+  const [adminAvailableStages, setAdminAvailableStages] = useState<string[]>([]);
+  const [adminAvailablePayments, setAdminAvailablePayments] = useState<string[]>([]);
+  const [adminAvailableTags, setAdminAvailableTags] = useState<string[]>([]);
+  const [salesPoolStats, setSalesPoolStats] = useState<AdminSalesPoolStatsResponse | null>(null);
+  const [salesPoolsLoading, setSalesPoolsLoading] = useState(false);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [userQuery, setUserQuery] = useState({
+    search: "",
+    stage: "all",
+    payment: "all",
+    path: "all",
+    tag: "all",
+    page: 1,
+    pageSize: 20,
+  });
 
   const checkSession = useCallback(async () => {
     try {
@@ -1620,13 +2003,48 @@ export default function AdminPage() {
   const fetchUsers = useCallback(async () => {
     setUsersLoading(true);
     try {
-      const res = await fetch("/api/admin/users", { credentials: "include" });
+      const params = new URLSearchParams();
+      if (userQuery.search) params.set("search", userQuery.search);
+      if (userQuery.stage !== "all") params.set("stage", userQuery.stage);
+      if (userQuery.payment !== "all") params.set("payment", userQuery.payment);
+      if (userQuery.path !== "all") params.set("path", userQuery.path);
+      if (userQuery.tag !== "all") params.set("tag", userQuery.tag);
+      params.set("page", String(userQuery.page));
+      params.set("pageSize", String(userQuery.pageSize));
+      const res = await fetch(`/api/admin/users?${params.toString()}`, { credentials: "include" });
       if (res.ok) {
-        const data = await res.json();
-        setAdminUsers(data);
+        const data: AdminUsersResponse = await res.json();
+        setAdminUsers(data.items);
+        setAdminUsersTotal(data.total);
+        setAdminUsersPage(data.page);
+        setAdminUsersTotalPages(data.totalPages);
+        setAdminAvailableStages(data.availableStages);
+        setAdminAvailablePayments(data.availablePayments);
+        setAdminAvailableTags(data.availableTags);
       }
     } catch {}
     setUsersLoading(false);
+  }, [userQuery]);
+
+  const fetchSalesPoolStats = useCallback(async () => {
+    setSalesPoolsLoading(true);
+    try {
+      const res = await fetch("/api/admin/users/pools", { credentials: "include" });
+      if (res.ok) {
+        const data: AdminSalesPoolStatsResponse = await res.json();
+        setSalesPoolStats(data);
+      }
+    } catch {}
+    setSalesPoolsLoading(false);
+  }, []);
+
+  const refreshUsersTab = useCallback(() => {
+    fetchUsers();
+    fetchSalesPoolStats();
+  }, [fetchUsers, fetchSalesPoolStats]);
+
+  const handleUserQueryChange = useCallback((patch: Partial<typeof userQuery>) => {
+    setUserQuery((prev) => ({ ...prev, ...patch }));
   }, []);
 
   useEffect(() => {
@@ -1639,6 +2057,12 @@ export default function AdminPage() {
       fetchStats();
     }
   }, [isAdmin, fetchContacts, fetchStats]);
+
+  useEffect(() => {
+    if (isAdmin && tab === "users") {
+      refreshUsersTab();
+    }
+  }, [isAdmin, tab, refreshUsersTab]);
 
   const handleCheckAll = useCallback(async () => {
     setCheckingAll(true);
@@ -1706,7 +2130,7 @@ export default function AdminPage() {
             顾问管理
           </button>
           <button
-            onClick={() => { setTab("users"); if (adminUsers.length === 0) fetchUsers(); }}
+            onClick={() => { setTab("users"); if (adminUsers.length === 0 || !salesPoolStats) refreshUsersTab(); }}
             className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-medium transition-colors whitespace-nowrap"
             style={{
               background: tab === "users" ? 'rgba(var(--gold-rgb), 0.15)' : 'rgba(255,255,255,0.03)',
@@ -1785,7 +2209,28 @@ export default function AdminPage() {
         )}
 
         {tab === "users" && (
-          <UsersPanel users={adminUsers} loading={usersLoading} onRefresh={fetchUsers} />
+          <>
+            <SalesPoolSummaryPanel
+              stats={salesPoolStats}
+              loading={salesPoolsLoading}
+              query={userQuery}
+              onSelectPool={(key) => handleUserQueryChange(buildAdminSalesPoolQueryPatch(key))}
+              onRefresh={refreshUsersTab}
+            />
+            <UsersPanel
+              users={adminUsers}
+              loading={usersLoading}
+              onRefresh={refreshUsersTab}
+              total={adminUsersTotal}
+              page={adminUsersPage}
+              totalPages={adminUsersTotalPages}
+              availableStages={adminAvailableStages}
+              availablePayments={adminAvailablePayments}
+              availableTags={adminAvailableTags}
+              query={userQuery}
+              onQueryChange={handleUserQueryChange}
+            />
+          </>
         )}
 
         {tab === "stats" && (
