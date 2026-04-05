@@ -1,3 +1,4 @@
+import React from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, BookOpen, ExternalLink, LockKeyhole, Radar, ShieldCheck, Wrench } from "lucide-react";
 import { diagnosticDimensionLabels, diagnosticTracks } from "@/data/orderflowDiagnostic";
@@ -11,6 +12,7 @@ interface OrderflowDiagnosticViewProps {
   result: OrderflowDiagnosticResult;
   title: string;
   subtitle: string;
+  customerFacing?: boolean;
   primaryAction?: {
     label: string;
     onClick: () => void;
@@ -34,6 +36,7 @@ export default function OrderflowDiagnosticView({
   result,
   title,
   subtitle,
+  customerFacing = false,
   primaryAction,
   secondaryAction,
 }: OrderflowDiagnosticViewProps) {
@@ -142,20 +145,22 @@ export default function OrderflowDiagnosticView({
                 {result.customerProfile.traderStage.summary}
               </p>
             </div>
-            <div
-              className="rounded-xl px-4 py-3"
-              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
-            >
-              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-                付费意向
-              </p>
-              <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-strong)" }}>
-                {result.customerProfile.paymentIntent.label}
-              </p>
-              <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                {result.customerProfile.paymentIntent.summary}
-              </p>
-            </div>
+            {!customerFacing && (
+              <div
+                className="rounded-xl px-4 py-3"
+                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+              >
+                <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                  付费意向
+                </p>
+                <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-strong)" }}>
+                  {result.customerProfile.paymentIntent.label}
+                </p>
+                <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                  {result.customerProfile.paymentIntent.summary}
+                </p>
+              </div>
+            )}
           </div>
           <div className="grid md:grid-cols-2 gap-3 mb-4">
             <div

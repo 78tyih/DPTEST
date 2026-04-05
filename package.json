@@ -19,6 +19,7 @@
     "test:orderflow-logic-map": "tsx script/test-orderflow-logic-map.ts",
     "test:orderflow-sales-playbook": "tsx script/test-orderflow-sales-playbook.ts",
     "test:orderflow-storage": "tsx script/test-orderflow-storage.ts",
+    "test:orderflow-result-presentation": "tsx script/test-orderflow-result-presentation.tsx",
     "db:push": "drizzle-kit push",
     "benchmark:stats": "tsx script/benchmark-stats.ts",
     "deploy:fly": "bash script/deploy-fly.sh"

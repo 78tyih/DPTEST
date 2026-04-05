@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/auth";
 import { queryClient } from "@/lib/queryClient";
 import { buildResultWebhookPayload, sendResultWebhook } from "@/utils/webhook";
 import OrderflowDiagnosticView from "@/components/OrderflowDiagnosticView";
+import { ORDERFLOW_RESULT_SUBTITLE, ORDERFLOW_RESULT_TITLE } from "@/data/orderflowPresentation";
 
 interface ResultPageProps {
   result: QuizResult | OrderflowDiagnosticResult;
@@ -535,8 +536,9 @@ export default function ResultPage({ result }: ResultPageProps) {
     return (
       <OrderflowDiagnosticView
         result={result}
-        title="订单流交易诊断结果"
-        subtitle="这份结果用于判断你现在更适合先做课程、软件、直播培育，还是考试盘路径。"
+        title={ORDERFLOW_RESULT_TITLE}
+        subtitle={ORDERFLOW_RESULT_SUBTITLE}
+        customerFacing
         primaryAction={{
           label: "回到个人主页",
           onClick: () => window.location.assign("/home"),
