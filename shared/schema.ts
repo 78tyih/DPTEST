@@ -56,6 +56,104 @@ export const agents = pgTable("agents", {
   name: varchar("name", { length: 50 }).notNull(),
   username: varchar("username", { length: 50 }).notNull().unique(),
   password: text("password").notNull(),
+  role: varchar("role", { length: 20 }).default("sales").notNull(),
+  leadEnabled: boolean("lead_enabled").default(true).notNull(),
+  leadAllocationWeight: integer("lead_allocation_weight").default(1).notNull(),
+  leadDailyQuota: integer("lead_daily_quota").default(50).notNull(),
+  leadPreferredMode: varchar("lead_preferred_mode", { length: 20 }).default("button").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const leadSources = pgTable("lead_sources", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const leadInvalidReasons = pgTable("lead_invalid_reasons", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const leadImportBatches = pgTable("lead_import_batches", {
+  id: serial("id").primaryKey(),
+  operatorAgentId: integer("operator_agent_id").notNull(),
+  sourceType: varchar("source_type", { length: 50 }).default("tencent_doc").notNull(),
+  sourceRef: text("source_ref"),
+  status: varchar("status", { length: 30 }).default("pending").notNull(),
+  totalCount: integer("total_count").default(0).notNull(),
+  insertedCount: integer("inserted_count").default(0).notNull(),
+  strongDuplicateBlockedCount: integer("strong_duplicate_blocked_count").default(0).notNull(),
+  weakDuplicateFlaggedCount: integer("weak_duplicate_flagged_count").default(0).notNull(),
+  failedCount: integer("failed_count").default(0).notNull(),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  finishedAt: timestamp("finished_at"),
+});
+
+export const leads = pgTable("leads", {
+  id: serial("id").primaryKey(),
+  importBatchId: integer("import_batch_id"),
+  sourcePlatformId: integer("source_platform_id"),
+  sourceActivity: varchar("source_activity", { length: 255 }),
+  operatorAgentId: integer("operator_agent_id"),
+  phone: varchar("phone", { length: 20 }),
+  wechatId: varchar("wechat_id", { length: 100 }),
+  wechatName: varchar("wechat_name", { length: 100 }),
+  wechatAvatarUrl: text("wechat_avatar_url"),
+  enterpriseWechatLink: text("enterprise_wechat_link"),
+  qrCodeImageUrl: text("qr_code_image_url"),
+  customerScreenshotUrl: text("customer_screenshot_url"),
+  assignedSalesAgentId: integer("assigned_sales_agent_id"),
+  assignedAt: timestamp("assigned_at"),
+  status: varchar("status", { length: 50 }).default("pending_assignment").notNull(),
+  isValid: boolean("is_valid"),
+  invalidReasonId: integer("invalid_reason_id"),
+  invalidNote: text("invalid_note"),
+  isSuspectedDuplicate: boolean("is_suspected_duplicate").default(false).notNull(),
+  duplicateScore: integer("duplicate_score"),
+  duplicateReviewStatus: varchar("duplicate_review_status", { length: 50 }).default("not_needed").notNull(),
+  duplicateReviewedBy: integer("duplicate_reviewed_by"),
+  duplicateReviewedAt: timestamp("duplicate_reviewed_at"),
+  duplicateReviewNote: text("duplicate_review_note"),
+  syncAt: timestamp("sync_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const leadAssignments = pgTable("lead_assignments", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").notNull(),
+  salesAgentId: integer("sales_agent_id").notNull(),
+  ruleType: varchar("rule_type", { length: 50 }).default("weighted_random").notNull(),
+  ruleSnapshot: jsonb("rule_snapshot"),
+  assignedAt: timestamp("assigned_at").defaultNow().notNull(),
+});
+
+export const leadActions = pgTable("lead_actions", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").notNull(),
+  salesAgentId: integer("sales_agent_id").notNull(),
+  actionType: varchar("action_type", { length: 50 }).notNull(),
+  actionValue: varchar("action_value", { length: 100 }),
+  metaJson: jsonb("meta_json"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const leadDuplicateReviews = pgTable("lead_duplicate_reviews", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").notNull(),
+  reviewResult: varchar("review_result", { length: 20 }).notNull(),
+  suspectedTargetLeadId: integer("suspected_target_lead_id"),
+  reviewedBy: integer("reviewed_by").notNull(),
+  reviewNote: text("review_note"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -101,6 +199,13 @@ export const chatMessages = pgTable("chat_messages", {
 export type Conversation = typeof conversations.$inferSelect;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type Agent = typeof agents.$inferSelect;
+export type LeadSource = typeof leadSources.$inferSelect;
+export type LeadInvalidReason = typeof leadInvalidReasons.$inferSelect;
+export type LeadImportBatch = typeof leadImportBatches.$inferSelect;
+export type Lead = typeof leads.$inferSelect;
+export type LeadAssignment = typeof leadAssignments.$inferSelect;
+export type LeadAction = typeof leadActions.$inferSelect;
+export type LeadDuplicateReview = typeof leadDuplicateReviews.$inferSelect;
 
 export const insertSalesContactSchema = createInsertSchema(salesContacts).pick({
   name: true,

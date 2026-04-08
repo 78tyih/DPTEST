@@ -1,4 +1,29 @@
-import { users, quizResults, userEvents, salesContacts, conversations, chatMessages, agents, type User, type InsertUser, type SalesContact, type InsertSalesContact, type Conversation, type ChatMessage, type Agent } from "@shared/schema";
+import {
+  users,
+  quizResults,
+  userEvents,
+  salesContacts,
+  conversations,
+  chatMessages,
+  agents,
+  leadSources,
+  leadInvalidReasons,
+  leadImportBatches,
+  leads,
+  leadAssignments,
+  leadActions,
+  leadDuplicateReviews,
+  type User,
+  type InsertUser,
+  type SalesContact,
+  type InsertSalesContact,
+  type Conversation,
+  type ChatMessage,
+  type Agent,
+  type Lead,
+  type LeadImportBatch,
+  type LeadInvalidReason,
+} from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, or, gte, lte, ne, isNull } from "drizzle-orm";
 import crypto from "crypto";
@@ -39,6 +64,83 @@ export interface IStorage {
   updateSalesContact(id: number, data: Partial<Pick<SalesContact, 'name' | 'url' | 'enabled'>>): Promise<SalesContact | undefined>;
   deleteSalesContact(id: number): Promise<void>;
   updateContactHealth(id: number, status: string): Promise<void>;
+  getAgentById(id: number): Promise<Agent | undefined>;
+  getLeadInvalidReasonByCode(code: string): Promise<LeadInvalidReason | undefined>;
+  listLeadImportBatches(limit?: number): Promise<LeadImportBatch[]>;
+  findStrongLeadDuplicate(data: { phone?: string; enterpriseWechatLink?: string }): Promise<Lead | undefined>;
+  findWeakLeadDuplicateCandidates(data: { wechatName?: string }): Promise<Lead[]>;
+  createLeadImportBatch(data: { operatorAgentId: number; sourceType?: string; sourceRef?: string | null; status?: string }): Promise<LeadImportBatch>;
+  completeLeadImportBatch(
+    id: number,
+    data: {
+      status: string;
+      totalCount: number;
+      insertedCount: number;
+      strongDuplicateBlockedCount: number;
+      weakDuplicateFlaggedCount: number;
+      failedCount: number;
+    },
+  ): Promise<LeadImportBatch | undefined>;
+  createLead(data: {
+    importBatchId?: number | null;
+    sourcePlatformId?: number | null;
+    sourceActivity?: string | null;
+    operatorAgentId?: number | null;
+    phone?: string | null;
+    wechatId?: string | null;
+    wechatName?: string | null;
+    wechatAvatarUrl?: string | null;
+    enterpriseWechatLink?: string | null;
+    qrCodeImageUrl?: string | null;
+    customerScreenshotUrl?: string | null;
+    status?: string;
+    isSuspectedDuplicate?: boolean;
+    duplicateScore?: number | null;
+    duplicateReviewStatus?: string;
+    syncAt?: Date | null;
+  }): Promise<Lead>;
+  listAllocatableSalesAgents(): Promise<Agent[]>;
+  assignLeadToSales(
+    leadId: number,
+    salesAgentId: number,
+    data?: { ruleType?: string; ruleSnapshot?: Record<string, unknown> | null },
+  ): Promise<Lead | undefined>;
+  getLeadQueueForSales(salesAgentId: number): Promise<Lead[]>;
+  markLeadValid(leadId: number, salesAgentId: number): Promise<Lead | undefined>;
+  markLeadInvalid(
+    leadId: number,
+    salesAgentId: number,
+    data: { reasonCode: string; note?: string | null },
+  ): Promise<Lead | undefined>;
+  getValidLeadsForSales(salesAgentId: number): Promise<Lead[]>;
+  getInvalidLeadsForSales(salesAgentId: number): Promise<Lead[]>;
+  getSalesLeadStats(salesAgentId: number): Promise<{
+    summary: {
+      total: number;
+      pending: number;
+      valid: number;
+      invalid: number;
+      processedToday: number;
+      validRate: number;
+      invalidRate: number;
+      avgHandleMinutes: number;
+    };
+    bySource: Array<{ sourcePlatform: string; count: number }>;
+    byReason: Array<{ reason: string; count: number }>;
+    trend: Array<{ label: string; valid: number; invalid: number }>;
+    recentValid: Lead[];
+    recentInvalid: Lead[];
+  }>;
+  getPendingDuplicateReviews(): Promise<Lead[]>;
+  reviewDuplicateLead(
+    leadId: number,
+    data: {
+      reviewedBy: number;
+      reviewResult: "keep" | "merge" | "void";
+      suspectedTargetLeadId?: number | null;
+      reviewNote?: string | null;
+    },
+  ): Promise<Lead | undefined>;
 }
 
 function generateShareToken(): string {
@@ -226,6 +328,408 @@ export class DatabaseStorage implements IStorage {
       lastHealthCheck: new Date(),
       lastHealthStatus: status,
     }).where(eq(salesContacts.id, id));
+  }
+
+  async getAgentById(id: number): Promise<Agent | undefined> {
+    const [agent] = await db.select().from(agents).where(eq(agents.id, id));
+    return agent || undefined;
+  }
+
+  async getLeadInvalidReasonByCode(code: string): Promise<LeadInvalidReason | undefined> {
+    const [reason] = await db.select().from(leadInvalidReasons).where(eq(leadInvalidReasons.code, code));
+    return reason || undefined;
+  }
+
+  async listLeadImportBatches(limit = 20): Promise<LeadImportBatch[]> {
+    return db.select().from(leadImportBatches).orderBy(desc(leadImportBatches.startedAt)).limit(limit);
+  }
+
+  async findStrongLeadDuplicate(data: { phone?: string; enterpriseWechatLink?: string }): Promise<Lead | undefined> {
+    const conditions = [];
+    if (data.phone) {
+      conditions.push(eq(leads.phone, data.phone));
+    }
+    if (data.enterpriseWechatLink) {
+      conditions.push(eq(leads.enterpriseWechatLink, data.enterpriseWechatLink));
+    }
+    if (!conditions.length) {
+      return undefined;
+    }
+    const [lead] = await db
+      .select()
+      .from(leads)
+      .where(conditions.length === 1 ? conditions[0] : or(...conditions))
+      .orderBy(desc(leads.createdAt))
+      .limit(1);
+    return lead || undefined;
+  }
+
+  async findWeakLeadDuplicateCandidates(data: { wechatName?: string }): Promise<Lead[]> {
+    if (!data.wechatName) {
+      return [];
+    }
+    return db
+      .select()
+      .from(leads)
+      .where(eq(leads.wechatName, data.wechatName))
+      .orderBy(desc(leads.createdAt))
+      .limit(5);
+  }
+
+  async createLeadImportBatch(data: {
+    operatorAgentId: number;
+    sourceType?: string;
+    sourceRef?: string | null;
+    status?: string;
+  }): Promise<LeadImportBatch> {
+    const [batch] = await db.insert(leadImportBatches).values({
+      operatorAgentId: data.operatorAgentId,
+      sourceType: data.sourceType ?? "tencent_doc",
+      sourceRef: data.sourceRef ?? null,
+      status: data.status ?? "pending",
+    }).returning();
+    return batch;
+  }
+
+  async completeLeadImportBatch(
+    id: number,
+    data: {
+      status: string;
+      totalCount: number;
+      insertedCount: number;
+      strongDuplicateBlockedCount: number;
+      weakDuplicateFlaggedCount: number;
+      failedCount: number;
+    },
+  ): Promise<LeadImportBatch | undefined> {
+    const [batch] = await db.update(leadImportBatches).set({
+      status: data.status,
+      totalCount: data.totalCount,
+      insertedCount: data.insertedCount,
+      strongDuplicateBlockedCount: data.strongDuplicateBlockedCount,
+      weakDuplicateFlaggedCount: data.weakDuplicateFlaggedCount,
+      failedCount: data.failedCount,
+      finishedAt: new Date(),
+    }).where(eq(leadImportBatches.id, id)).returning();
+    return batch || undefined;
+  }
+
+  async createLead(data: {
+    importBatchId?: number | null;
+    sourcePlatformId?: number | null;
+    sourceActivity?: string | null;
+    operatorAgentId?: number | null;
+    phone?: string | null;
+    wechatId?: string | null;
+    wechatName?: string | null;
+    wechatAvatarUrl?: string | null;
+    enterpriseWechatLink?: string | null;
+    qrCodeImageUrl?: string | null;
+    customerScreenshotUrl?: string | null;
+    status?: string;
+    isSuspectedDuplicate?: boolean;
+    duplicateScore?: number | null;
+    duplicateReviewStatus?: string;
+    syncAt?: Date | null;
+  }): Promise<Lead> {
+    const [lead] = await db.insert(leads).values({
+      importBatchId: data.importBatchId ?? null,
+      sourcePlatformId: data.sourcePlatformId ?? null,
+      sourceActivity: data.sourceActivity ?? null,
+      operatorAgentId: data.operatorAgentId ?? null,
+      phone: data.phone ?? null,
+      wechatId: data.wechatId ?? null,
+      wechatName: data.wechatName ?? null,
+      wechatAvatarUrl: data.wechatAvatarUrl ?? null,
+      enterpriseWechatLink: data.enterpriseWechatLink ?? null,
+      qrCodeImageUrl: data.qrCodeImageUrl ?? null,
+      customerScreenshotUrl: data.customerScreenshotUrl ?? null,
+      status: data.status ?? "pending_assignment",
+      isSuspectedDuplicate: data.isSuspectedDuplicate ?? false,
+      duplicateScore: data.duplicateScore ?? null,
+      duplicateReviewStatus: data.duplicateReviewStatus ?? "not_needed",
+      syncAt: data.syncAt ?? new Date(),
+    }).returning();
+    return lead;
+  }
+
+  async listAllocatableSalesAgents(): Promise<Agent[]> {
+    return db
+      .select()
+      .from(agents)
+      .where(and(eq(agents.role, "sales"), eq(agents.leadEnabled, true)))
+      .orderBy(agents.id);
+  }
+
+  async assignLeadToSales(
+    leadId: number,
+    salesAgentId: number,
+    data?: { ruleType?: string; ruleSnapshot?: Record<string, unknown> | null },
+  ): Promise<Lead | undefined> {
+    const assignedAt = new Date();
+    const [lead] = await db.update(leads).set({
+      assignedSalesAgentId: salesAgentId,
+      assignedAt,
+      status: "pending_sales_action",
+      updatedAt: assignedAt,
+    }).where(eq(leads.id, leadId)).returning();
+    if (!lead) {
+      return undefined;
+    }
+    await db.insert(leadAssignments).values({
+      leadId,
+      salesAgentId,
+      ruleType: data?.ruleType ?? "weighted_random",
+      ruleSnapshot: data?.ruleSnapshot ?? null,
+      assignedAt,
+    });
+    return lead;
+  }
+
+  async getLeadQueueForSales(salesAgentId: number): Promise<Lead[]> {
+    return db
+      .select()
+      .from(leads)
+      .where(and(eq(leads.assignedSalesAgentId, salesAgentId), eq(leads.status, "pending_sales_action")))
+      .orderBy(desc(leads.createdAt));
+  }
+
+  async markLeadValid(leadId: number, salesAgentId: number): Promise<Lead | undefined> {
+    const actedAt = new Date();
+    const [lead] = await db.update(leads).set({
+      status: "valid",
+      isValid: true,
+      updatedAt: actedAt,
+    }).where(and(eq(leads.id, leadId), eq(leads.assignedSalesAgentId, salesAgentId))).returning();
+    if (!lead) {
+      return undefined;
+    }
+    await db.insert(leadActions).values({
+      leadId,
+      salesAgentId,
+      actionType: "mark_valid",
+      actionValue: "valid",
+      metaJson: null,
+      createdAt: actedAt,
+    });
+    return lead;
+  }
+
+  async markLeadInvalid(
+    leadId: number,
+    salesAgentId: number,
+    data: { reasonCode: string; note?: string | null },
+  ): Promise<Lead | undefined> {
+    const reason = await this.getLeadInvalidReasonByCode(data.reasonCode);
+    if (!reason) {
+      throw new Error(`Invalid reason code: ${data.reasonCode}`);
+    }
+    const actedAt = new Date();
+    const [lead] = await db.update(leads).set({
+      status: "invalid",
+      isValid: false,
+      invalidReasonId: reason.id,
+      invalidNote: data.note ?? null,
+      updatedAt: actedAt,
+    }).where(and(eq(leads.id, leadId), eq(leads.assignedSalesAgentId, salesAgentId))).returning();
+    if (!lead) {
+      return undefined;
+    }
+    await db.insert(leadActions).values({
+      leadId,
+      salesAgentId,
+      actionType: "mark_invalid",
+      actionValue: data.reasonCode,
+      metaJson: data.note ? { note: data.note } : null,
+      createdAt: actedAt,
+    });
+    return lead;
+  }
+
+  async getValidLeadsForSales(salesAgentId: number): Promise<Lead[]> {
+    return db
+      .select()
+      .from(leads)
+      .where(and(eq(leads.assignedSalesAgentId, salesAgentId), eq(leads.status, "valid")))
+      .orderBy(desc(leads.updatedAt));
+  }
+
+  async getInvalidLeadsForSales(salesAgentId: number): Promise<Lead[]> {
+    return db
+      .select()
+      .from(leads)
+      .where(and(eq(leads.assignedSalesAgentId, salesAgentId), eq(leads.status, "invalid")))
+      .orderBy(desc(leads.updatedAt));
+  }
+
+  async getSalesLeadStats(salesAgentId: number): Promise<{
+    summary: {
+      total: number;
+      pending: number;
+      valid: number;
+      invalid: number;
+      processedToday: number;
+      validRate: number;
+      invalidRate: number;
+      avgHandleMinutes: number;
+    };
+    bySource: Array<{ sourcePlatform: string; count: number }>;
+    byReason: Array<{ reason: string; count: number }>;
+    trend: Array<{ label: string; valid: number; invalid: number }>;
+    recentValid: Lead[];
+    recentInvalid: Lead[];
+  }> {
+    const allLeads = await db
+      .select({
+        id: leads.id,
+        status: leads.status,
+        createdAt: leads.createdAt,
+        updatedAt: leads.updatedAt,
+        sourcePlatformId: leads.sourcePlatformId,
+        invalidReasonId: leads.invalidReasonId,
+      })
+      .from(leads)
+      .where(eq(leads.assignedSalesAgentId, salesAgentId));
+
+    const sourceRows = await db.select().from(leadSources);
+    const reasonRows = await db.select().from(leadInvalidReasons);
+    const recentValid = await this.getValidLeadsForSales(salesAgentId);
+    const recentInvalid = await this.getInvalidLeadsForSales(salesAgentId);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let pending = 0;
+    let valid = 0;
+    let invalid = 0;
+    let processedToday = 0;
+    let handledDiffMinutes = 0;
+    const bySourceMap = new Map<number, number>();
+    const byReasonMap = new Map<number, number>();
+    const trendMap = new Map<string, { valid: number; invalid: number }>();
+
+    for (const row of allLeads) {
+      if (row.status === "pending_sales_action") {
+        pending += 1;
+      } else if (row.status === "valid") {
+        valid += 1;
+      } else if (row.status === "invalid") {
+        invalid += 1;
+      }
+
+      if (row.sourcePlatformId) {
+        bySourceMap.set(row.sourcePlatformId, (bySourceMap.get(row.sourcePlatformId) ?? 0) + 1);
+      }
+
+      if (row.invalidReasonId) {
+        byReasonMap.set(row.invalidReasonId, (byReasonMap.get(row.invalidReasonId) ?? 0) + 1);
+      }
+
+      if (row.status === "valid" || row.status === "invalid") {
+        if (row.updatedAt && row.updatedAt >= today) {
+          processedToday += 1;
+        }
+
+        const label = row.updatedAt
+          ? row.updatedAt.toISOString().slice(5, 10)
+          : row.createdAt.toISOString().slice(5, 10);
+        const entry = trendMap.get(label) ?? { valid: 0, invalid: 0 };
+        if (row.status === "valid") {
+          entry.valid += 1;
+        } else {
+          entry.invalid += 1;
+        }
+        trendMap.set(label, entry);
+
+        if (row.updatedAt && row.createdAt) {
+          handledDiffMinutes += Math.max(0, Math.round((row.updatedAt.getTime() - row.createdAt.getTime()) / 60000));
+        }
+      }
+    }
+
+    const processed = valid + invalid;
+    const total = allLeads.length;
+
+    return {
+      summary: {
+        total,
+        pending,
+        valid,
+        invalid,
+        processedToday,
+        validRate: processed > 0 ? Math.round((valid / processed) * 100) : 0,
+        invalidRate: processed > 0 ? Math.round((invalid / processed) * 100) : 0,
+        avgHandleMinutes: processed > 0 ? Math.round(handledDiffMinutes / processed) : 0,
+      },
+      bySource: sourceRows
+        .filter((row) => bySourceMap.has(row.id))
+        .map((row) => ({ sourcePlatform: row.name, count: bySourceMap.get(row.id) ?? 0 })),
+      byReason: reasonRows
+        .filter((row) => byReasonMap.has(row.id))
+        .map((row) => ({ reason: row.name, count: byReasonMap.get(row.id) ?? 0 })),
+      trend: Array.from(trendMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([label, value]) => ({ label, valid: value.valid, invalid: value.invalid })),
+      recentValid: recentValid.slice(0, 5),
+      recentInvalid: recentInvalid.slice(0, 5),
+    };
+  }
+
+  async getPendingDuplicateReviews(): Promise<Lead[]> {
+    return db
+      .select()
+      .from(leads)
+      .where(
+        and(
+          eq(leads.isSuspectedDuplicate, true),
+          eq(leads.duplicateReviewStatus, "pending"),
+          eq(leads.status, "suspected_duplicate_pending_review"),
+        ),
+      )
+      .orderBy(desc(leads.createdAt));
+  }
+
+  async reviewDuplicateLead(
+    leadId: number,
+    data: {
+      reviewedBy: number;
+      reviewResult: "keep" | "merge" | "void";
+      suspectedTargetLeadId?: number | null;
+      reviewNote?: string | null;
+    },
+  ): Promise<Lead | undefined> {
+    const reviewedAt = new Date();
+    const statusByResult = {
+      keep: "pending_assignment",
+      merge: "void",
+      void: "void",
+    } as const;
+    const reviewStatusByResult = {
+      keep: "approved_keep",
+      merge: "approved_merge",
+      void: "approved_void",
+    } as const;
+
+    await db.insert(leadDuplicateReviews).values({
+      leadId,
+      reviewResult: data.reviewResult,
+      suspectedTargetLeadId: data.suspectedTargetLeadId ?? null,
+      reviewedBy: data.reviewedBy,
+      reviewNote: data.reviewNote ?? null,
+      createdAt: reviewedAt,
+    });
+
+    const [lead] = await db.update(leads).set({
+      status: statusByResult[data.reviewResult],
+      isSuspectedDuplicate: data.reviewResult === "keep" ? false : true,
+      duplicateReviewStatus: reviewStatusByResult[data.reviewResult],
+      duplicateReviewedBy: data.reviewedBy,
+      duplicateReviewedAt: reviewedAt,
+      duplicateReviewNote: data.reviewNote ?? null,
+      updatedAt: reviewedAt,
+    }).where(eq(leads.id, leadId)).returning();
+
+    return lead || undefined;
   }
 
   // ========== 聊天系统 ==========

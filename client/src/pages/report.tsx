@@ -14,10 +14,10 @@ import { usePageView, useTracking } from "@/hooks/use-tracking";
 
 const ease = { duration: 0.22, ease: "easeOut" as const };
 
-const DELTAPEX_URL = "https://deltapex.zeabur.app";
+const DELTAPEX_URL = "https://deltapex.top";
 const BILIBILI_LIVE = "https://live.bilibili.com/1874453448";
 const ATAS_URL = "https://atas.net/cn/?rs=partners_oft281860";
-const CASES_URL = "https://deltapex.zeabur.app/cases.html";
+const CASES_URL = "https://deltapex.top/cases.html";
 
 const dimAdvice: Record<Dimension, { text: string; resource: string; icon: string; url: string }> = {
   EDGE: { text: "在直播间观察老师如何发现高概率交易机会，学习识别关键市场结构", resource: "实盘直播间", icon: "📡", url: BILIBILI_LIVE },

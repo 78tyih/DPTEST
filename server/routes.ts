@@ -1,12 +1,23 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertUserSchema, loginSchema, insertEventSchema, insertSalesContactSchema } from "@shared/schema";
+import {
+  insertUserSchema,
+  loginSchema,
+  insertEventSchema,
+  insertSalesContactSchema,
+  agents,
+  leadSources,
+  leadInvalidReasons,
+  leadImportBatches,
+  leads,
+} from "@shared/schema";
 import { sendRegistrationNotification, sendResultNotification, sendContactAlertNotification } from "./webhook";
+import { internalSalesStrategy } from "./internal-sales-strategy";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool, db } from "./db";
-import { sql } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { getAdminStats, getExternalStats } from "./stats";
 
@@ -25,6 +36,21 @@ const BLOCKED_KEYWORDS = [
 const HEALTHY_KEYWORD = "添加我为微信好友";
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const leadRuleConfig = {
+  mode: "weighted_random",
+  defaultOwner: "",
+  sourcePriority: "zhihu,xiaohongshu,bilibili,douyin,other",
+  dailyCap: "50",
+  duplicateThreshold: "70",
+  fallbackSales: "",
+  routingNotes: "",
+};
+const leadImportPreviewStore = new Map<string, {
+  rows: Record<string, unknown>[];
+  preview: Awaited<ReturnType<typeof buildLeadImportPreview>>;
+  createdAt: number;
+}>();
+const LEAD_IMPORT_PREVIEW_TTL = 30 * 60 * 1000;
 
 async function checkContactAlive(url: string, skipCache = false): Promise<boolean> {
   if (!skipCache) {
@@ -86,6 +112,324 @@ function requireAgent(req: any, res: any, next: any) {
     return res.status(401).json({ message: "未登录" });
   }
   next();
+}
+
+async function getLeadSessionAgent(req: any) {
+  const agentId = (req.session as any).agentId as number | undefined;
+  if (!agentId) return null;
+  return storage.getAgentById(agentId);
+}
+
+function requireLeadRoles(roles: Array<"admin" | "operator" | "sales">) {
+  return async (req: any, res: any, next: any) => {
+    const agent = await getLeadSessionAgent(req);
+    if (!agent) {
+      return res.status(401).json({ message: "未登录" });
+    }
+    if (!roles.includes(agent.role as "admin" | "operator" | "sales")) {
+      return res.status(403).json({ message: "没有权限" });
+    }
+    (req as any).leadAgent = agent;
+    next();
+  };
+}
+
+function pickFirstString(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
+function normalizeLeadImportRow(row: Record<string, unknown>) {
+  return {
+    sourceCode: pickFirstString(row, ["sourcePlatform", "source_platform", "platform", "source", "channel"]).toLowerCase() || "other",
+    sourceActivity: pickFirstString(row, ["sourceActivity", "source_activity", "campaign", "activity"]),
+    operatorName: pickFirstString(row, ["operatorName", "operator_name", "operator", "owner", "creatorName"]),
+    phone: pickFirstString(row, ["phone", "mobile", "contactPhone", "contact_phone"]),
+    wechatId: pickFirstString(row, ["wechatId", "wechat_id", "wxid"]),
+    wechatName: pickFirstString(row, ["wechatName", "wechat_name", "wechat", "wxName"]),
+    wechatAvatarUrl: pickFirstString(row, ["wechatAvatarUrl", "wechat_avatar_url", "avatar", "avatarUrl"]),
+    enterpriseWechatLink: pickFirstString(row, ["enterpriseWechatLink", "enterprise_wechat_link", "wechatLink", "leadLink"]),
+    qrCodeImageUrl: pickFirstString(row, ["qrCodeImageUrl", "qr_code_image_url", "qrCode", "qr_code"]),
+    customerScreenshotUrl: pickFirstString(row, ["customerScreenshotUrl", "customer_screenshot_url", "screenshotUrl", "screenshot", "imageUrl", "image_url"]),
+  };
+}
+
+async function buildLeadDisplayItems(rows: Array<typeof leads.$inferSelect>) {
+  const [sourceRows, reasonRows, agentRows] = await Promise.all([
+    db.select().from(leadSources),
+    db.select().from(leadInvalidReasons),
+    db.select().from(agents),
+  ]);
+  const sourceMap = new Map(sourceRows.map((item) => [item.id, item.name]));
+  const reasonMap = new Map(reasonRows.map((item) => [item.id, item.name]));
+  const agentMap = new Map(agentRows.map((item) => [item.id, item.name]));
+
+  return rows.map((lead) => ({
+    ...lead,
+    sourcePlatform: lead.sourcePlatformId ? sourceMap.get(lead.sourcePlatformId) ?? "其他" : "其他",
+    operatorName: lead.operatorAgentId ? agentMap.get(lead.operatorAgentId) ?? "未知运营" : "未知运营",
+    assignedSalesName: lead.assignedSalesAgentId ? agentMap.get(lead.assignedSalesAgentId) ?? "未分配" : "未分配",
+    invalidReason: lead.invalidReasonId ? reasonMap.get(lead.invalidReasonId) ?? "" : "",
+    screenshotUrl: lead.customerScreenshotUrl ?? lead.qrCodeImageUrl ?? "",
+  }));
+}
+
+async function buildLeadQueuePayload(rows: Array<typeof leads.$inferSelect>) {
+  const items = await buildLeadDisplayItems(rows);
+  const summary = {
+    total: items.length,
+    pending: items.filter((item) => item.status === "pending_sales_action").length,
+    valid: items.filter((item) => item.status === "valid").length,
+    invalid: items.filter((item) => item.status === "invalid").length,
+  };
+  return { items, summary };
+}
+
+async function buildLeadImportPreview(rows: Record<string, unknown>[]) {
+  const strongDuplicates: Array<Record<string, unknown>> = [];
+  const weakDuplicates: Array<Record<string, unknown>> = [];
+  const failures: Array<Record<string, unknown>> = [];
+  let added = 0;
+
+  for (const row of rows) {
+    const normalized = normalizeLeadImportRow(row);
+    if (!normalized.phone && !normalized.enterpriseWechatLink && !normalized.wechatName && !normalized.customerScreenshotUrl) {
+      failures.push({ ...row, reason: "缺少可识别字段" });
+      continue;
+    }
+
+    const strongDuplicate = await storage.findStrongLeadDuplicate({
+      phone: normalized.phone || undefined,
+      enterpriseWechatLink: normalized.enterpriseWechatLink || undefined,
+    });
+    if (strongDuplicate) {
+      strongDuplicates.push({ ...row, matchedLeadId: strongDuplicate.id, reason: "强重复" });
+      continue;
+    }
+
+    const weakCandidates = await storage.findWeakLeadDuplicateCandidates({
+      wechatName: normalized.wechatName || undefined,
+    });
+    if (weakCandidates.length > 0) {
+      weakDuplicates.push({
+        ...row,
+        matchedLeadIds: weakCandidates.map((item) => item.id),
+        score: Math.min(95, 60 + weakCandidates.length * 5),
+        reason: "疑似重复",
+      });
+      continue;
+    }
+
+    added += 1;
+  }
+
+  return {
+    summary: {
+      total: rows.length,
+      added,
+      strongDuplicates: strongDuplicates.length,
+      weakDuplicates: weakDuplicates.length,
+      failed: failures.length,
+    },
+    strongDuplicates,
+    weakDuplicates,
+    failures,
+  };
+}
+
+function cleanupLeadImportPreviewStore() {
+  const now = Date.now();
+  for (const [key, value] of Array.from(leadImportPreviewStore.entries())) {
+    if (now - value.createdAt > LEAD_IMPORT_PREVIEW_TTL) {
+      leadImportPreviewStore.delete(key);
+    }
+  }
+}
+
+function extractLeadImportRows(body: unknown) {
+  if (Array.isArray(body)) {
+    return body.filter((item): item is Record<string, unknown> => !!item && typeof item === "object");
+  }
+  if (!body || typeof body !== "object") {
+    return [];
+  }
+  const record = body as Record<string, unknown>;
+  const candidates = [record.rows, record.records, record.items];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate.filter((item): item is Record<string, unknown> => !!item && typeof item === "object");
+    }
+  }
+  return [];
+}
+
+function normalizeLeadSourceCode(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return "other";
+  if (normalized.includes("zhihu") || normalized.includes("知乎")) return "zhihu";
+  if (normalized.includes("xiaohongshu") || normalized.includes("小红书")) return "xiaohongshu";
+  if (normalized.includes("bilibili") || normalized.includes("b站") || normalized.includes("哔哩")) return "bilibili";
+  if (normalized.includes("douyin") || normalized.includes("抖音")) return "douyin";
+  return "other";
+}
+
+function normalizeInvalidReasonCode(value: string) {
+  const normalized = value.trim().toLowerCase();
+  const aliases: Record<string, string> = {
+    wrong_contact: "invalid_info",
+    wechat_mismatch: "invalid_info",
+    not_interested: "rejected",
+    duplicate: "existing_student_or_duplicate",
+  };
+  return aliases[normalized] ?? normalized;
+}
+
+async function hydrateLeadImportBatches(rows: Array<typeof leadImportBatches.$inferSelect>) {
+  const agentRows = await db.select().from(agents);
+  const agentMap = new Map(agentRows.map((item) => [item.id, item.name]));
+  return rows.map((batch) => ({
+    ...batch,
+    operator: agentMap.get(batch.operatorAgentId) ?? `#${batch.operatorAgentId}`,
+    source: batch.sourceType,
+    total: batch.totalCount,
+    added: batch.insertedCount,
+    strongDuplicates: batch.strongDuplicateBlockedCount,
+    weakDuplicates: batch.weakDuplicateFlaggedCount,
+    failed: batch.failedCount,
+  }));
+}
+
+async function buildLeadAdminStats() {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const [[totalRow], [todayRow], [validRow], [invalidRow], [pendingRow], [strongRow], [weakRow]] = await Promise.all([
+    db.select({ count: sql<number>`count(*)` }).from(leads),
+    db.select({ count: sql<number>`count(*)` }).from(leads).where(gte(leads.createdAt, todayStart)),
+    db.select({ count: sql<number>`count(*)` }).from(leads).where(eq(leads.status, "valid")),
+    db.select({ count: sql<number>`count(*)` }).from(leads).where(eq(leads.status, "invalid")),
+    db.select({ count: sql<number>`count(*)` }).from(leads).where(eq(leads.status, "pending_sales_action")),
+    db.select({ count: sql<number>`COALESCE(SUM(${leadImportBatches.strongDuplicateBlockedCount}), 0)` }).from(leadImportBatches),
+    db.select({ count: sql<number>`COALESCE(SUM(${leadImportBatches.weakDuplicateFlaggedCount}), 0)` }).from(leadImportBatches),
+  ]);
+
+  return {
+    total: Number(totalRow?.count ?? 0),
+    today: Number(todayRow?.count ?? 0),
+    valid: Number(validRow?.count ?? 0),
+    invalid: Number(invalidRow?.count ?? 0),
+    pending: Number(pendingRow?.count ?? 0),
+    strongDuplicates: Number(strongRow?.count ?? 0),
+    weakDuplicates: Number(weakRow?.count ?? 0),
+  };
+}
+
+async function buildLeadAdminOverview() {
+  const salesResult = await db.execute(sql`
+    SELECT
+      COALESCE(a.name, '未分配') AS name,
+      COUNT(*)::int AS count
+    FROM leads l
+    LEFT JOIN agents a ON a.id = l.assigned_sales_agent_id
+    GROUP BY COALESCE(a.name, '未分配')
+    ORDER BY COUNT(*) DESC, COALESCE(a.name, '未分配') ASC
+  `);
+
+  const platformResult = await db.execute(sql`
+    SELECT
+      COALESCE(s.name, '其他') AS name,
+      COUNT(*)::int AS count
+    FROM leads l
+    LEFT JOIN lead_sources s ON s.id = l.source_platform_id
+    GROUP BY COALESCE(s.name, '其他')
+    ORDER BY COUNT(*) DESC, COALESCE(s.name, '其他') ASC
+  `);
+
+  const statusResult = await db.execute(sql`
+    SELECT
+      l.status AS name,
+      COUNT(*)::int AS count
+    FROM leads l
+    GROUP BY l.status
+    ORDER BY COUNT(*) DESC, l.status ASC
+  `);
+
+  return {
+    sales: (salesResult.rows ?? salesResult ?? []) as Array<Record<string, unknown>>,
+    platforms: (platformResult.rows ?? platformResult ?? []) as Array<Record<string, unknown>>,
+    statuses: (statusResult.rows ?? statusResult ?? []) as Array<Record<string, unknown>>,
+  };
+}
+
+async function buildDuplicateReviewItems(rows: Array<typeof leads.$inferSelect>) {
+  const items = await buildLeadDisplayItems(rows);
+  const linkedTargets = await Promise.all(
+    rows.map(async (lead) => {
+      const candidates = await storage.findWeakLeadDuplicateCandidates({
+        wechatName: lead.wechatName ?? undefined,
+      });
+      return candidates.find((candidate) => candidate.id !== lead.id);
+    }),
+  );
+
+  return items.map((item, index) => {
+    const matchedFields = [];
+    if (item.wechatName) matchedFields.push("微信名");
+    if (item.customerScreenshotUrl) matchedFields.push("截图");
+    return {
+      ...item,
+      score: item.duplicateScore ?? 70,
+      reason: matchedFields.length > 0 ? `${matchedFields.join("、")}相似` : "疑似重复",
+      matchedFields,
+      targetLeadId: linkedTargets[index]?.id ?? null,
+      reviewStatus: item.duplicateReviewStatus,
+    };
+  });
+}
+
+async function pickWeightedSalesAgent() {
+  const candidates = await storage.listAllocatableSalesAgents();
+  if (!candidates.length) return undefined;
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const counts = await Promise.all(
+    candidates.map(async (agent) => {
+      const result = await db.select({ count: sql<number>`count(*)` }).from(leads).where(
+        and(eq(leads.assignedSalesAgentId, agent.id), gte(leads.assignedAt, todayStart)),
+      );
+      return {
+        agent,
+        todayCount: Number(result[0]?.count ?? 0),
+      };
+    }),
+  );
+
+  const eligible = counts.filter(({ agent, todayCount }) => todayCount < agent.leadDailyQuota);
+  const pool = eligible.length > 0 ? eligible : counts;
+  if (!pool.length) return undefined;
+
+  if (leadRuleConfig.mode === "round_robin") {
+    const selected = pool[salesCounter % pool.length];
+    salesCounter = (salesCounter + 1) % Math.max(pool.length, 1);
+    return selected.agent;
+  }
+
+  const totalWeight = pool.reduce((sum, item) => sum + Math.max(item.agent.leadAllocationWeight, 1), 0);
+  let cursor = Math.random() * totalWeight;
+  for (const item of pool) {
+    cursor -= Math.max(item.agent.leadAllocationWeight, 1);
+    if (cursor <= 0) {
+      return item.agent;
+    }
+  }
+  return pool[pool.length - 1].agent;
 }
 
 async function runHealthMonitor() {
@@ -525,9 +869,16 @@ export async function registerRoutes(
 
   app.post("/api/webhook/result", async (req, res) => {
     try {
-      const { phone, wechatName, scores, traderType, rank, avgScore, salesStrategy, verifyCode } = req.body;
+      const { phone, wechatName, scores, traderType, rank, avgScore, traderTypeCode, salesStrategy, verifyCode } = req.body;
       if (!phone || !traderType) {
         return res.status(400).json({ message: "缺少必要字段" });
+      }
+
+      const resolvedStrategy =
+        (typeof traderTypeCode === "string" ? internalSalesStrategy[traderTypeCode] : undefined) ||
+        salesStrategy;
+      if (!resolvedStrategy) {
+        return res.status(400).json({ message: "缺少销售跟进策略" });
       }
 
       const userId = (req.session as any)?.userId;
@@ -541,7 +892,7 @@ export async function registerRoutes(
         }
       }
 
-      sendResultNotification({ phone, wechatName, scores, traderType, rank, avgScore, salesStrategy, reportUrl, verifyCode });
+      sendResultNotification({ phone, wechatName, scores, traderType, rank, avgScore, salesStrategy: resolvedStrategy, reportUrl, verifyCode });
       res.json({ success: true });
     } catch (err) {
       console.error("Result webhook error:", err);
@@ -574,6 +925,396 @@ export async function registerRoutes(
 
   app.post("/api/wechat-contact/switch", async (_req, res) => {
     res.json({ disabled: true, message: "企业微信顾问服务暂停中" });
+  });
+
+  // ===== Lead Ops MVP =====
+
+  app.post("/api/lead/import/preview", requireLeadRoles(["admin", "operator"]), async (req, res) => {
+    try {
+      cleanupLeadImportPreviewStore();
+      const rows = extractLeadImportRows(req.body);
+      if (rows.length === 0) {
+        return res.status(400).json({ message: "请提供 JSON 数组格式的线索数据" });
+      }
+
+      const preview = await buildLeadImportPreview(rows);
+      const previewId = globalThis.crypto?.randomUUID?.() ?? `lead-preview-${Date.now()}`;
+      leadImportPreviewStore.set(previewId, {
+        rows,
+        preview,
+        createdAt: Date.now(),
+      });
+
+      res.json({
+        ...preview,
+        previewId,
+        recentBatches: await hydrateLeadImportBatches(await storage.listLeadImportBatches(8)),
+      });
+    } catch (err) {
+      console.error("[lead] import preview error:", err);
+      res.status(500).json({ message: "预检失败，请稍后重试" });
+    }
+  });
+
+  app.post("/api/lead/import/commit", requireLeadRoles(["admin", "operator"]), async (req, res) => {
+    try {
+      cleanupLeadImportPreviewStore();
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const previewId = typeof body.previewId === "string"
+        ? body.previewId
+        : typeof body.preview_id === "string"
+          ? body.preview_id
+          : undefined;
+      const storedPreview = previewId ? leadImportPreviewStore.get(previewId) : undefined;
+      const rows = extractLeadImportRows(body).length > 0
+        ? extractLeadImportRows(body)
+        : storedPreview?.rows ?? [];
+
+      if (rows.length === 0) {
+        return res.status(400).json({ message: "没有可提交的线索数据" });
+      }
+
+      const sourceRows = await db.select().from(leadSources);
+      const sourceMap = new Map(sourceRows.map((item) => [item.code, item]));
+      const otherSourceId = sourceMap.get("other")?.id ?? null;
+      const operator = (req as any).leadAgent;
+      const batch = await storage.createLeadImportBatch({
+        operatorAgentId: operator.id,
+        sourceType: "tencent_doc",
+        sourceRef: previewId ?? null,
+        status: "processing",
+      });
+
+      let strongDuplicates = 0;
+      let weakDuplicates = 0;
+      let failed = 0;
+      let inserted = 0;
+      const createdLeadIds: number[] = [];
+
+      for (const row of rows) {
+        const normalized = normalizeLeadImportRow(row);
+        if (!normalized.phone && !normalized.enterpriseWechatLink && !normalized.wechatName && !normalized.customerScreenshotUrl) {
+          failed += 1;
+          continue;
+        }
+
+        const strongDuplicate = await storage.findStrongLeadDuplicate({
+          phone: normalized.phone || undefined,
+          enterpriseWechatLink: normalized.enterpriseWechatLink || undefined,
+        });
+        if (strongDuplicate) {
+          strongDuplicates += 1;
+          continue;
+        }
+
+        const weakCandidates = await storage.findWeakLeadDuplicateCandidates({
+          wechatName: normalized.wechatName || undefined,
+        });
+        const suspectedDuplicate = weakCandidates.length > 0;
+        const sourceCode = normalizeLeadSourceCode(normalized.sourceCode);
+        const sourcePlatformId = sourceMap.get(sourceCode)?.id ?? otherSourceId;
+
+        const lead = await storage.createLead({
+          importBatchId: batch.id,
+          sourcePlatformId,
+          sourceActivity: normalized.sourceActivity || null,
+          operatorAgentId: operator.id,
+          phone: normalized.phone || null,
+          wechatId: normalized.wechatId || null,
+          wechatName: normalized.wechatName || null,
+          wechatAvatarUrl: normalized.wechatAvatarUrl || null,
+          enterpriseWechatLink: normalized.enterpriseWechatLink || null,
+          qrCodeImageUrl: normalized.qrCodeImageUrl || null,
+          customerScreenshotUrl: normalized.customerScreenshotUrl || null,
+          status: suspectedDuplicate ? "suspected_duplicate_pending_review" : "pending_assignment",
+          isSuspectedDuplicate: suspectedDuplicate,
+          duplicateScore: suspectedDuplicate ? Math.min(95, 60 + weakCandidates.length * 5) : null,
+          duplicateReviewStatus: suspectedDuplicate ? "pending" : "not_needed",
+          syncAt: new Date(),
+        });
+        createdLeadIds.push(lead.id);
+        inserted += 1;
+
+        if (suspectedDuplicate) {
+          weakDuplicates += 1;
+          continue;
+        }
+
+        const salesAgent = await pickWeightedSalesAgent();
+        if (salesAgent) {
+          await storage.assignLeadToSales(lead.id, salesAgent.id, {
+            ruleType: leadRuleConfig.mode,
+            ruleSnapshot: {
+              sourcePriority: leadRuleConfig.sourcePriority,
+              dailyCap: leadRuleConfig.dailyCap,
+              duplicateThreshold: leadRuleConfig.duplicateThreshold,
+              fallbackSales: leadRuleConfig.fallbackSales,
+            },
+          });
+        }
+      }
+
+      const completedBatch = await storage.completeLeadImportBatch(batch.id, {
+        status: "completed",
+        totalCount: rows.length,
+        insertedCount: inserted,
+        strongDuplicateBlockedCount: strongDuplicates,
+        weakDuplicateFlaggedCount: weakDuplicates,
+        failedCount: failed,
+      });
+
+      if (previewId) {
+        leadImportPreviewStore.delete(previewId);
+      }
+
+      res.json({
+        ok: true,
+        batchId: completedBatch?.id ?? batch.id,
+        leadIds: createdLeadIds,
+        summary: {
+          total: rows.length,
+          added: Math.max(inserted - weakDuplicates, 0),
+          inserted,
+          strongDuplicates,
+          weakDuplicates,
+          failed,
+        },
+        message: "导入完成",
+      });
+    } catch (err) {
+      console.error("[lead] import commit error:", err);
+      res.status(500).json({ message: "导入失败，请稍后重试" });
+    }
+  });
+
+  app.get("/api/lead/import/batches", requireLeadRoles(["admin", "operator"]), async (_req, res) => {
+    try {
+      const rows = await storage.listLeadImportBatches(20);
+      res.json({ items: await hydrateLeadImportBatches(rows) });
+    } catch (err) {
+      console.error("[lead] import batches error:", err);
+      res.status(500).json({ message: "获取导入批次失败" });
+    }
+  });
+
+  app.get("/api/lead/queue", requireLeadRoles(["sales", "admin"]), async (req, res) => {
+    try {
+      const agent = (req as any).leadAgent;
+      const [rows, stats] = await Promise.all([
+        storage.getLeadQueueForSales(agent.id),
+        storage.getSalesLeadStats(agent.id),
+      ]);
+      res.json({
+        items: await buildLeadDisplayItems(rows),
+        summary: stats.summary,
+      });
+    } catch (err) {
+      console.error("[lead] queue error:", err);
+      res.status(500).json({ message: "获取待处理线索失败" });
+    }
+  });
+
+  app.post("/api/lead/:id/mark-valid", requireLeadRoles(["sales", "admin"]), async (req, res) => {
+    try {
+      const leadId = Number(req.params.id);
+      if (!Number.isInteger(leadId) || leadId <= 0) {
+        return res.status(400).json({ message: "无效线索 ID" });
+      }
+
+      const agent = (req as any).leadAgent;
+      const lead = await storage.markLeadValid(leadId, agent.id);
+      if (!lead) {
+        return res.status(404).json({ message: "线索不存在或不属于当前销售" });
+      }
+
+      res.json({ ok: true, lead });
+    } catch (err) {
+      console.error("[lead] mark valid error:", err);
+      res.status(500).json({ message: "标记有效失败" });
+    }
+  });
+
+  app.post("/api/lead/:id/mark-invalid", requireLeadRoles(["sales", "admin"]), async (req, res) => {
+    try {
+      const leadId = Number(req.params.id);
+      if (!Number.isInteger(leadId) || leadId <= 0) {
+        return res.status(400).json({ message: "无效线索 ID" });
+      }
+
+      const reasonRaw = typeof req.body?.reason === "string" ? req.body.reason : "";
+      const reasonCode = normalizeInvalidReasonCode(reasonRaw);
+      if (!reasonCode) {
+        return res.status(400).json({ message: "请选择无效原因" });
+      }
+
+      const note = typeof req.body?.note === "string" ? req.body.note.trim() : undefined;
+      const agent = (req as any).leadAgent;
+      const lead = await storage.markLeadInvalid(leadId, agent.id, {
+        reasonCode,
+        note,
+      });
+
+      if (!lead) {
+        return res.status(404).json({ message: "线索不存在或不属于当前销售" });
+      }
+
+      res.json({ ok: true, lead });
+    } catch (err) {
+      console.error("[lead] mark invalid error:", err);
+      const message = err instanceof Error && err.message.startsWith("Invalid reason code")
+        ? "无效原因不在允许列表中"
+        : "标记无效失败";
+      res.status(500).json({ message });
+    }
+  });
+
+  app.get("/api/lead/valid", requireLeadRoles(["sales", "admin"]), async (req, res) => {
+    try {
+      const agent = (req as any).leadAgent;
+      const [rows, stats] = await Promise.all([
+        storage.getValidLeadsForSales(agent.id),
+        storage.getSalesLeadStats(agent.id),
+      ]);
+      res.json({
+        items: await buildLeadDisplayItems(rows),
+        summary: stats.summary,
+      });
+    } catch (err) {
+      console.error("[lead] valid list error:", err);
+      res.status(500).json({ message: "获取有效线索失败" });
+    }
+  });
+
+  app.get("/api/lead/invalid", requireLeadRoles(["sales", "admin"]), async (req, res) => {
+    try {
+      const agent = (req as any).leadAgent;
+      const [rows, stats] = await Promise.all([
+        storage.getInvalidLeadsForSales(agent.id),
+        storage.getSalesLeadStats(agent.id),
+      ]);
+      res.json({
+        items: await buildLeadDisplayItems(rows),
+        summary: stats.summary,
+      });
+    } catch (err) {
+      console.error("[lead] invalid list error:", err);
+      res.status(500).json({ message: "获取无效线索失败" });
+    }
+  });
+
+  app.get("/api/lead/stats/me", requireLeadRoles(["sales", "admin"]), async (req, res) => {
+    try {
+      const agent = (req as any).leadAgent;
+      const stats = await storage.getSalesLeadStats(agent.id);
+      const [recentValid, recentInvalid] = await Promise.all([
+        buildLeadDisplayItems(stats.recentValid),
+        buildLeadDisplayItems(stats.recentInvalid),
+      ]);
+      res.json({
+        ...stats,
+        recentValid,
+        recentInvalid,
+      });
+    } catch (err) {
+      console.error("[lead] personal stats error:", err);
+      res.status(500).json({ message: "获取个人统计失败" });
+    }
+  });
+
+  app.get("/api/lead/admin/stats", requireLeadRoles(["admin"]), async (_req, res) => {
+    try {
+      res.json(await buildLeadAdminStats());
+    } catch (err) {
+      console.error("[lead] admin stats error:", err);
+      res.status(500).json({ message: "获取统计失败" });
+    }
+  });
+
+  app.get("/api/lead/admin/overview", requireLeadRoles(["admin"]), async (_req, res) => {
+    try {
+      res.json(await buildLeadAdminOverview());
+    } catch (err) {
+      console.error("[lead] admin overview error:", err);
+      res.status(500).json({ message: "获取概览失败" });
+    }
+  });
+
+  app.get("/api/lead/admin/duplicates", requireLeadRoles(["admin"]), async (_req, res) => {
+    try {
+      const rows = await storage.getPendingDuplicateReviews();
+      res.json({ items: await buildDuplicateReviewItems(rows) });
+    } catch (err) {
+      console.error("[lead] duplicate review list error:", err);
+      res.status(500).json({ message: "获取疑似重复列表失败" });
+    }
+  });
+
+  app.post("/api/lead/admin/duplicates/:id/review", requireLeadRoles(["admin"]), async (req, res) => {
+    try {
+      const leadId = Number(req.params.id);
+      if (!Number.isInteger(leadId) || leadId <= 0) {
+        return res.status(400).json({ message: "无效线索 ID" });
+      }
+
+      const action = typeof req.body?.action === "string" ? req.body.action : "";
+      if (!["keep", "merge", "void"].includes(action)) {
+        return res.status(400).json({ message: "无效审核动作" });
+      }
+
+      const targetLeadId = typeof req.body?.targetLeadId === "number"
+        ? req.body.targetLeadId
+        : typeof req.body?.target_lead_id === "number"
+          ? req.body.target_lead_id
+          : undefined;
+      const note = typeof req.body?.note === "string" ? req.body.note.trim() : undefined;
+
+      const reviewed = await storage.reviewDuplicateLead(leadId, {
+        reviewedBy: (req as any).leadAgent.id,
+        reviewResult: action as "keep" | "merge" | "void",
+        suspectedTargetLeadId: targetLeadId,
+        reviewNote: note,
+      });
+
+      if (!reviewed) {
+        return res.status(404).json({ message: "线索不存在" });
+      }
+
+      if (action === "keep") {
+        const salesAgent = await pickWeightedSalesAgent();
+        if (salesAgent) {
+          await storage.assignLeadToSales(reviewed.id, salesAgent.id, {
+            ruleType: leadRuleConfig.mode,
+            ruleSnapshot: {
+              sourcePriority: leadRuleConfig.sourcePriority,
+              dailyCap: leadRuleConfig.dailyCap,
+              duplicateThreshold: leadRuleConfig.duplicateThreshold,
+              fallbackSales: leadRuleConfig.fallbackSales,
+            },
+          });
+        }
+      }
+
+      res.json({ ok: true, lead: reviewed });
+    } catch (err) {
+      console.error("[lead] duplicate review error:", err);
+      res.status(500).json({ message: "审核失败，请稍后重试" });
+    }
+  });
+
+  app.get("/api/lead/admin/rules", requireLeadRoles(["admin"]), async (_req, res) => {
+    res.json(leadRuleConfig);
+  });
+
+  app.post("/api/lead/admin/rules", requireLeadRoles(["admin"]), async (req, res) => {
+    const body = (req.body?.rules && typeof req.body.rules === "object" ? req.body.rules : req.body ?? {}) as Record<string, unknown>;
+    leadRuleConfig.mode = typeof body.mode === "string" && body.mode.trim() ? body.mode.trim() : leadRuleConfig.mode;
+    leadRuleConfig.defaultOwner = typeof body.defaultOwner === "string" ? body.defaultOwner.trim() : leadRuleConfig.defaultOwner;
+    leadRuleConfig.sourcePriority = typeof body.sourcePriority === "string" ? body.sourcePriority.trim() : leadRuleConfig.sourcePriority;
+    leadRuleConfig.dailyCap = typeof body.dailyCap === "string" ? body.dailyCap.trim() : leadRuleConfig.dailyCap;
+    leadRuleConfig.duplicateThreshold = typeof body.duplicateThreshold === "string" ? body.duplicateThreshold.trim() : leadRuleConfig.duplicateThreshold;
+    leadRuleConfig.fallbackSales = typeof body.fallbackSales === "string" ? body.fallbackSales.trim() : leadRuleConfig.fallbackSales;
+    leadRuleConfig.routingNotes = typeof body.routingNotes === "string" ? body.routingNotes.trim() : leadRuleConfig.routingNotes;
+    res.json({ ok: true, ...leadRuleConfig });
   });
 
   // ===== 客服 Agent 独立登录系统 =====

@@ -18,7 +18,7 @@ import { usePageView, useTracking } from "@/hooks/use-tracking";
 // 企业微信相关 imports 已移除
 import { useAuth } from "@/lib/auth";
 import { queryClient } from "@/lib/queryClient";
-import { buildResultWebhookPayload, sendResultWebhook } from "@/utils/webhook";
+import { sendResultWebhook } from "@/utils/webhook";
 
 interface ResultPageProps {
   result: QuizResult;
@@ -586,14 +586,21 @@ export default function ResultPage({ result }: ResultPageProps) {
           queryClient.invalidateQueries({ queryKey: ["/api/me"] });
 
           if (user?.phone && sessionStorage.getItem(RESULT_WEBHOOK_SENT_KEY) !== "true") {
-            const payload = buildResultWebhookPayload({
+            sendResultWebhook({
               phone: user.phone,
-              normalizedScores,
+              scores: normalizedScores,
               traderTypeCode: traderType.code,
+              traderType: {
+                code: traderType.code,
+                name: traderType.name,
+                emoji: traderType.icon,
+              },
+              rank: {
+                name: rank.name,
+                emoji: rank.icon,
+              },
               avgScore,
-              rankName: rank.name,
-            });
-            sendResultWebhook(payload).catch(() => {});
+            }).catch(() => {});
             sessionStorage.setItem(RESULT_WEBHOOK_SENT_KEY, "true");
           }
         }).catch(() => {

@@ -131,7 +131,7 @@ export default function LandingPage() {
           className="mt-8 text-center"
         >
           <a
-            href="https://deltapex.zeabur.app"
+            href="https://deltapex.top"
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs transition-all duration-200 hover:underline"

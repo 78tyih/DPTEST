@@ -16,7 +16,7 @@ Hi Sera！以下是这个项目目前的状态和你接下来要做的事。
 
 #### ✅ 客服独立账号系统（最新）
 - Sera / Deven / Anna 三人各有独立登录账号
-- 后台地址：https://dptest-org.fly.dev/admin/chat
+- 后台地址：https://deltapex.top/admin/chat
 - 账号：`sera` / `deven` / `anna`，密码：`sera123` / `deven123` / `anna123`（可改）
 - 登录后只看到自己的数据看板
 
@@ -52,8 +52,8 @@ Hi Sera！以下是这个项目目前的状态和你接下来要做的事。
 
 **P0 — 立即要做**
 1. **改密码** — 把默认密码 `sera123` 等改成安全密码
-   - 通过 Fly secrets 设置：`fly secrets set SERA_PASSWORD=新密码 -a dptest-org`（需要重新部署生效）
-   - 或者让 Alex 帮你改
+   - 通过 Zeabur 项目环境变量修改 `SERA_PASSWORD` / `DEVEN_PASSWORD` / `ANNA_PASSWORD`
+   - 保存后重新部署，让新密码写入初始化逻辑
 
 **P1 — 近期要做**
 2. **客服后台 UI 升级** — 目前功能完整但样式一般，计划做成 LobeChat 风格（Alex 已确认这个方向）
@@ -67,7 +67,7 @@ Hi Sera！以下是这个项目目前的状态和你接下来要做的事。
 
 ### 📌 每天工作流程（建议）
 
-1. 打开后台 https://dptest-org.fly.dev/admin/chat 登录
+1. 打开后台 https://deltapex.top/admin/chat 登录
 2. 看左侧数据看板：今日邀约率目标 > 60%
 3. 有 AI 转接提醒（黄色条）→ 优先接管
 4. 接管后看绿色 AI 建议话术 → 可采纳也可自己来
@@ -80,38 +80,19 @@ Hi Sera！以下是这个项目目前的状态和你接下来要做的事。
 
 - TypeScript 全栈（Vite + React 前端，Express 后端）
 - Tailwind CSS + shadcn/ui
-- Drizzle ORM（PostgreSQL on Fly.io）
+- Drizzle ORM（PostgreSQL）
 - WebSocket（ws 库）实时双向通信
 - AI：DeepSeek V3（通过 VectorEngine 中转，兼容 OpenAI SDK）
 - 包管理：npm
 
 ## 部署
 
-- **平台**：Fly.io
-- **App**：`dptest-org`
-- **区域**：`sin`（新加坡）
-- **线上地址**：https://dptest-org.fly.dev/
-- **配置**：`fly.toml`
+- **平台**：Zeabur
+- **线上域名**：https://deltapex.top/
+- **当前主部署入口**：`Dockerfile`
+- **部署说明**：`ZEABUR_DEPLOY.md`
 
-### 部署命令
-
-```bash
-fly deploy
-```
-
-一条命令搞定，Docker 自动构建 + 推送 + 滚动更新。
-
-### 查看日志
-
-```bash
-fly logs -a dptest-org
-```
-
-### 设置环境变量
-
-```bash
-fly secrets set KEY=VALUE -a dptest-org
-```
+线上以 Zeabur 为唯一主线部署方式。仓库中的 `fly.toml` 与 `script/deploy-fly.sh` 仅保留为历史痕迹，不再作为当前发布路径。
 
 ## 关键文件结构
 
@@ -156,4 +137,4 @@ const ai = new OpenAI({
 // model: "deepseek-v3-250324"
 ```
 
-环境变量：`VECTORENGINE_API_KEY`（已在 Fly.io secrets 中设置）
+环境变量：`VECTORENGINE_API_KEY`（在 Zeabur 环境变量中配置）

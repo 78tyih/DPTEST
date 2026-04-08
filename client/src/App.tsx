@@ -10,6 +10,12 @@ import { useAuth } from "@/lib/auth";
 import NotFound from "@/pages/not-found";
 import AdminPage from "@/pages/admin";
 import AdminChatPage from "@/pages/admin-chat";
+import LeadAdminPage from "@/pages/lead-admin";
+import LeadInvalidPage from "@/pages/lead-invalid";
+import LeadMobilePage from "@/pages/lead-mobile";
+import LeadOpsImportPage from "@/pages/lead-ops-import";
+import LeadStatsPage from "@/pages/lead-stats";
+import LeadValidPage from "@/pages/lead-valid";
 import ChatWidget from "@/components/ChatWidget";
 import LiveRoomFloat from "@/components/LiveRoomFloat";
 import WeChatBrowserGuide from "@/components/WeChatBrowserGuide";
@@ -21,7 +27,7 @@ import LoadingPage from "@/pages/loading";
 import ResultPage from "@/pages/result";
 import ReportPage from "@/pages/report";
 import { calculateResult, type QuizResult } from "@/utils/calculateResult";
-import { buildResultWebhookPayload, sendResultWebhook } from "@/utils/webhook";
+import { sendResultWebhook } from "@/utils/webhook";
 import { traderTypes, rankTiers, rarityMap } from "@/data/traderTypes";
 
 const ANSWERS_KEY = "quiz_answers";
@@ -146,14 +152,21 @@ function Router() {
         queryClient.invalidateQueries({ queryKey: ["/api/me"] });
 
         if (user?.phone && sessionStorage.getItem(RESULT_WEBHOOK_SENT_KEY) !== "true") {
-          const payload = buildResultWebhookPayload({
+          sendResultWebhook({
             phone: user.phone,
-            normalizedScores: result.normalizedScores,
+            scores: result.normalizedScores,
             traderTypeCode: result.traderType.code,
+            traderType: {
+              code: result.traderType.code,
+              name: result.traderType.name,
+              emoji: result.traderType.icon,
+            },
+            rank: {
+              name: result.rank.name,
+              emoji: result.rank.icon,
+            },
             avgScore: result.avgScore,
-            rankName: result.rank.name,
-          });
-          sendResultWebhook(payload).catch(() => {});
+          }).catch(() => {});
           sessionStorage.setItem(RESULT_WEBHOOK_SENT_KEY, "true");
         }
       }
@@ -202,11 +215,33 @@ function Router() {
 
           <Route path="/admin" component={AdminPage} />
           <Route path="/admin/chat" component={AdminChatPage} />
+          <Route path="/lead/mobile" component={LeadMobilePage} />
+          <Route path="/lead/valid" component={LeadValidPage} />
+          <Route path="/lead/invalid" component={LeadInvalidPage} />
+          <Route path="/lead/stats" component={LeadStatsPage} />
+          <Route path="/lead/ops-import" component={LeadOpsImportPage} />
+          <Route path="/lead/admin" component={LeadAdminPage} />
 
           <Route component={NotFound} />
         </Switch>
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+function GlobalOverlays() {
+  const [location] = useLocation();
+  const hideFloatingTools = location.startsWith("/admin") || location.startsWith("/lead");
+
+  if (hideFloatingTools) {
+    return null;
+  }
+
+  return (
+    <>
+      <ChatWidget />
+      <LiveRoomFloat />
+    </>
   );
 }
 
@@ -218,8 +253,7 @@ function App() {
           <WeChatBrowserGuide />
           <Toaster />
           <Router />
-          <ChatWidget />
-          <LiveRoomFloat />
+          <GlobalOverlays />
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>

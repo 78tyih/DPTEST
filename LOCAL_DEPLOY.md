@@ -1,5 +1,8 @@
 # 一键本地部署指南
 
+> 本文档仅用于本地 Docker 联调。
+> 当前默认线上部署主线为 `Zeabur + deltapex.top`，见 `ZEABUR_DEPLOY.md`。
+
 ## 前提条件
 
 安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)（Mac / Windows 均可）。
@@ -36,7 +39,7 @@ DB_PASSWORD=deltapex123
 SESSION_SECRET=用下面命令生成
 ADMIN_PASSWORD=你的管理后台密码
 EXTERNAL_API_KEY=你的API密钥（可选）
-BASE_URL=https://test.deltapex.cn
+BASE_URL=https://deltapex.top
 WECHAT_WEBHOOK_URL=（可选）
 ```
 
@@ -114,7 +117,7 @@ cat backup.sql | docker compose exec -T db psql -U deltapex deltapex_db
 ```nginx
 server {
     listen 80;
-    server_name test.deltapex.cn;
+    server_name deltapex.top;
 
     location / {
         proxy_pass http://127.0.0.1:5000;
@@ -132,10 +135,10 @@ server {
 4. 配置 SSL：
 
 ```bash
-sudo certbot --nginx -d test.deltapex.cn
+sudo certbot --nginx -d deltapex.top
 ```
 
-5. DNS 解析：在域名管理后台添加 A 记录，主机记录 `test`，记录值填服务器公网 IP。
+5. DNS 解析：在域名管理后台添加域名解析，记录值填服务器公网 IP。
 
 ---
 

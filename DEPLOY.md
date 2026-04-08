@@ -1,6 +1,9 @@
 # Deltapex Trading Group 部署文档
 
-本文档介绍如何将本项目部署到独立服务器上，并绑定自定义域名（如 `test.deltapex.cn`）。
+本文档介绍如何将本项目部署到独立服务器上，并绑定自定义域名（如 `deltapex.top`）。
+
+> 当前默认线上部署主线为 `Zeabur + deltapex.top`，见 `ZEABUR_DEPLOY.md`。
+> 本文档保留为自托管服务器方案。
 
 ---
 
@@ -147,7 +150,7 @@ module.exports = {
       SESSION_SECRET: '替换为一个随机字符串_至少32个字符',
       ADMIN_PASSWORD: '你的管理后台密码',
       EXTERNAL_API_KEY: '你的外部API密钥',
-      BASE_URL: 'https://test.deltapex.cn'
+      BASE_URL: 'https://deltapex.top'
     },
     instances: 1,
     autorestart: true,
@@ -198,12 +201,12 @@ pm2 monit              # 监控面板
 sudo nano /etc/nginx/sites-available/deltapex
 ```
 
-写入以下内容（将 `test.deltapex.cn` 替换为你实际使用的域名）：
+写入以下内容（将 `deltapex.top` 替换为你实际使用的域名）：
 
 ```nginx
 server {
     listen 80;
-    server_name test.deltapex.cn;
+    server_name deltapex.top;
 
     # 限制请求体大小（上传文件等）
     client_max_body_size 10M;
@@ -239,7 +242,7 @@ sudo systemctl reload nginx
 
 ```bash
 # 使用 Certbot 自动获取 Let's Encrypt 免费证书
-sudo certbot --nginx -d test.deltapex.cn
+sudo certbot --nginx -d deltapex.top
 
 # 按提示操作，选择自动重定向 HTTP 到 HTTPS
 
@@ -379,7 +382,7 @@ DB_PASSWORD=deltapex123                           # 数据库密码
 SESSION_SECRET=change_me_to_a_random_string       # 会话密钥（openssl rand -hex 32 生成）
 ADMIN_PASSWORD=1212                               # 管理后台密码
 EXTERNAL_API_KEY=                                 # 外部 API 密钥（可选）
-BASE_URL=https://test.deltapex.cn                 # 站点域名
+BASE_URL=https://deltapex.top                     # 站点域名
 WECHAT_WEBHOOK_URL=                               # 企微 Webhook（可选）
 ```
 
